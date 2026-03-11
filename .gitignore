@@ -1,0 +1,17 @@
+# Secrets
+.env
+credentials.json
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# OS
+.DS_Store
+
+# Generated data
+variants/
+logs/
+figures/
