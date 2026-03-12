@@ -10,13 +10,17 @@ presented in different ways (plain text vs. agentic context) and tones
 ## Architecture
 
 ```
-dataset.csv → PROMPT.md (Claude Code) → variants/<ID>.json
-                                              ↓
-                                  src/eval_task.py  (Inspect AI)
-                                              ↓
-                                  logs/*.eval
-                                              ↓
-                                  src/analyze.py → figures/*.png
+dataset.csv → scripts/generate_ralphy_tasks.py → tasks/entry_<ID>.md
+                                                       │
+                                                  ralphy --prd tasks/
+                                                       │
+                                                 variants/<ID>.json
+                                                       ↓
+                                           src/eval_task.py  (Inspect AI)
+                                                       ↓
+                                                 logs/*.eval
+                                                       ↓
+                                           src/analyze.py → figures/*.png
 ```
 
 ### Key modules
@@ -26,35 +30,89 @@ dataset.csv → PROMPT.md (Claude Code) → variants/<ID>.json
 | `src/config.py` | Central path definitions — all other modules import from here |
 | `src/schemas.py` | Pydantic models & Literal type aliases for tones/modalities |
 | `src/dataset.py` | Loads `dataset.csv` into `Entry` dataclasses |
-| `PROMPT.md` | Instructions for Claude Code to generate variant JSON files |
-| `src/eval_task.py` | Inspect AI `@task` — the core evaluation |
+| `src/eval_task.py` | Inspect AI `@task` — multi-turn eval with mock tool execution |
 | `src/analyze.py` | Post-hoc analysis of `.eval` logs (stats + figures) |
 | `src/validate.py` | CLI tool for checking variant file integrity |
-| `src/domain_templates.json` | Domain-specific agentic context templates |
+| `scripts/generate_ralphy_tasks.py` | Generates per-entry Ralphy task files |
 
 ## Running Commands
 
 ```bash
-# Build variants: use Claude Code with PROMPT.md
-# e.g., point Claude Code at specific entry IDs and follow PROMPT.md instructions
+# Build variants: generate task files then run Ralphy
+python3 scripts/generate_ralphy_tasks.py
+ralphy --prd tasks/ --parallel --max-parallel 10 --max-retries 5
 
 # Validate built variants
 python3 -m src.validate validate
 python3 -m src.validate summary
 python3 -m src.validate missing
 
-# Run evaluation
-inspect eval src/eval_task.py --model openai/gpt-4o
-inspect eval src/eval_task.py --model openai/gpt-4o -T max_samples=100
-
-# Override grader model
+# Run evaluation (grader model override is REQUIRED):
 inspect eval src/eval_task.py --model openai/gpt-4o \
     --model-role grader=anthropic/claude-sonnet-4-20250514
+
+inspect eval src/eval_task.py --model openai/gpt-4o \
+    --model-role grader=anthropic/claude-sonnet-4-20250514 \
+    -T max_samples=100
 
 # Analyze results
 python3 -m src.analyze
 python3 -m src.analyze logs/<specific-log>.eval
 ```
+
+## Experimental Design
+
+### Independent Variables
+
+**Modality** (4 levels, decomposed to isolate confounds):
+
+| Modality | System prompt | Tools/Files | History | Tests |
+|----------|:---:|:---:|:---:|---------|
+| `plain_text` | — | — | — | Baseline |
+| `plain_text_with_history` | — | — | ✓ | Social proof |
+| `agentic_no_history` | ✓ | ✓ | — | Role framing |
+| `agentic` | ✓ | ✓ | ✓ | Full agentic |
+
+**Tone** (3 levels, persona-based, length-controlled ±20%):
+- `verbatim` — exact original prompt
+- `formal` — professional register, no added framing/authority
+- `casual` — informal register, no removed specifics
+
+### Controls
+
+- System prompt, tools, files, and tool_responses are **identical across tones** within an entry
+- Conversation history content is consistent across tones (only register differs)
+- Verbatim conversation history matches the prompt author's writing style
+- Tone rephrasing changes **only** linguistic register, not content or length
+- Mock tool responses simulate real tool behavior (tools have no guardrails)
+- Grader model must differ from eval model (enforced at runtime)
+
+### Pre-registered Hypotheses
+
+These hypotheses were specified before analyzing results. All tests use
+non-parametric methods (Mann-Whitney U, Kruskal-Wallis) with Bonferroni
+correction for multiple comparisons.
+
+**H1 (Modality main effect):** The full agentic modality produces higher
+median compliance scores than plain_text.
+
+**H2 (Conversation history effect):** plain_text_with_history produces
+higher compliance than plain_text, isolating the effect of social proof
+from prior engagement.
+
+**H3 (Role framing effect):** agentic_no_history produces higher
+compliance than plain_text, isolating the effect of system prompt + tools.
+
+**H4 (Additivity):** The full agentic condition produces higher compliance
+than either partial condition alone (plain_text_with_history or
+agentic_no_history).
+
+**H5 (Tone null hypothesis):** Tone has no significant effect on compliance
+scores when controlling for modality — tone variations are register-only
+and should not materially affect guardrail behavior.
+
+**H6 (Domain moderation):** The modality effect varies by risk domain
+(interaction effect).
 
 ## Best Practices
 
@@ -62,14 +120,16 @@ python3 -m src.analyze logs/<specific-log>.eval
 
 - **Use `@task` parameters** for anything you might want to vary from the CLI
   (e.g., `max_samples`, grader settings). Expose via `-T key=value`.
-- **Use `get_model("grader")`** in scorers so the grader model can be overridden
-  with `--model-role grader=<model>` without changing code.
+- **Always override the grader model** with
+  `--model-role grader=<different-model>`. Self-grading (using the eval model
+  as grader) is blocked at runtime.
 - **Use `MemoryDataset` with a `name`** so logs clearly identify the dataset.
 - **Set `fail_on_error`** on `Task` to tolerate a fraction of sample failures
   rather than aborting the entire evaluation run.
 - **Set `name` and `version`** on `Task` for traceable eval logs.
-- **Scorer metrics**: Use `mean()` and `stderr()` for continuous scores; use
-  `accuracy()` and `stderr()` for categorical scores.
+- **Scorer metrics**: `mean()` and `stderr()` are retained for Inspect UI
+  compatibility. The real analysis in `src/analyze.py` uses ordinal statistics
+  (median, IQR, Mann-Whitney U, Kruskal-Wallis).
 - Prefer **typed metadata** with a frozen Pydantic model (`SampleMetadata`) so
   that metadata keys are validated at dataset-load time, not discovered as
   KeyErrors at scoring time.
@@ -86,8 +146,7 @@ python3 -m src.analyze logs/<specific-log>.eval
 - **Use Literal types** for fixed string enums (`Tone`, `Modality` in
   `src/schemas.py`). Export canonical lists (`TONES`, `MODALITIES`) for
   iteration.
-- **Data goes in data files**. Large domain-specific templates live in
-  `src/domain_templates.json`, not inlined in Python source.
+- **Data goes in data files**, not inlined in Python source.
 - **No print side effects** in library functions (e.g., `load_entries` should
   not print). Reserve print/logging for CLI entry points.
 - **Pydantic for validation**: use `EntryVariants` to validate variant JSON
@@ -95,18 +154,16 @@ python3 -m src.analyze logs/<specific-log>.eval
 
 ### Evaluation Workflow
 
-1. **Build** variants: use Claude Code with `PROMPT.md`
+1. **Build** variants: `python3 scripts/generate_ralphy_tasks.py` then `ralphy --prd tasks/ --parallel --max-parallel 10 --max-retries 5`
 2. **Validate** completeness: `python3 -m src.validate summary`
-3. **Run** eval: `inspect eval src/eval_task.py --model <model>`
+3. **Run** eval: `inspect eval src/eval_task.py --model <model> --model-role grader=<model>`
 4. **Analyze** results: `python3 -m src.analyze`
 
 ### Adding a New Risk Domain
 
 1. Add entries to `dataset.csv`
-2. Add a new top-level key to `src/domain_templates.json` with
-   `system_prompts`, `tool_sets`, `file_sets`, and `conversation_templates`
-3. Follow `PROMPT.md` instructions with Claude Code to generate variants
-   for the new entries
+2. Re-run `python3 scripts/generate_ralphy_tasks.py` (generates tasks only for missing entries)
+3. Run Ralphy to generate variants for the new entries
 
 ### Files to Never Commit
 

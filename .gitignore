@@ -12,6 +12,9 @@ venv/
 .DS_Store
 
 # Generated data
-variants/
 logs/
 figures/
+
+# Viewer
+viewer/node_modules/
+viewer/.next/

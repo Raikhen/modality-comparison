@@ -1,0 +1,161 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import type { EntrySummary } from "@/lib/types";
+import { DomainBadge } from "./DomainBadge";
+import { FilterBar } from "./FilterBar";
+
+type SortKey = "entry_id" | "risk_domain" | "prompt_preview";
+type SortDir = "asc" | "desc";
+
+function SortIndicator({ active, dir }: { active: boolean; dir: SortDir }) {
+  return (
+    <svg
+      className="inline-block ml-1 w-2.5 h-3 align-middle"
+      viewBox="0 0 10 14"
+      fill="currentColor"
+      style={{ color: active ? "var(--color-ink-secondary)" : "var(--color-ink-muted)" }}
+    >
+      <path
+        d="M5 1L8.5 5.5H1.5Z"
+        opacity={!active || dir === "asc" ? 1 : 0.2}
+      />
+      <path
+        d="M5 13L1.5 8.5H8.5Z"
+        opacity={!active || dir === "desc" ? 1 : 0.2}
+      />
+    </svg>
+  );
+}
+
+export function EntryTable({
+  entries,
+  domains,
+}: {
+  entries: EntrySummary[];
+  domains: string[];
+}) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const q = (searchParams.get("q") ?? "").toLowerCase();
+  const domain = searchParams.get("domain") ?? "";
+
+  const [sortKey, setSortKey] = useState<SortKey>("entry_id");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
+
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDir(sortDir === "asc" ? "desc" : "asc");
+    } else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  };
+
+  const filtered = entries.filter((e) => {
+    if (domain && e.risk_domain !== domain) return false;
+    if (
+      q &&
+      !e.prompt_preview.toLowerCase().includes(q) &&
+      !String(e.entry_id).includes(q)
+    )
+      return false;
+    return true;
+  });
+
+  const sorted = [...filtered].sort((a, b) => {
+    let cmp: number;
+    if (sortKey === "entry_id") {
+      cmp = a.entry_id - b.entry_id;
+    } else {
+      cmp = a[sortKey].localeCompare(b[sortKey]);
+    }
+    return sortDir === "asc" ? cmp : -cmp;
+  });
+
+  const columns: { key: SortKey; label: string; width?: string }[] = [
+    { key: "entry_id", label: "ID", width: "56px" },
+    { key: "risk_domain", label: "Domain", width: "180px" },
+    { key: "prompt_preview", label: "Prompt" },
+  ];
+
+  return (
+    <div>
+      <FilterBar domains={domains} />
+      <div
+        className="font-mono text-[10px] uppercase tracking-wider mb-2"
+        style={{ color: "var(--color-ink-muted)" }}
+      >
+        {sorted.length} of {entries.length} entries
+      </div>
+      <div
+        className="rounded-sm overflow-hidden"
+        style={{
+          background: "var(--color-surface)",
+          border: "1px solid var(--color-rule)",
+        }}
+      >
+        <table className="w-full text-xs">
+          <thead>
+            <tr style={{ borderBottom: "1px solid var(--color-rule-emphasis)" }}>
+              {columns.map((col) => (
+                <th
+                  key={col.key}
+                  onClick={() => toggleSort(col.key)}
+                  className="px-3 py-2 text-left font-mono font-medium uppercase tracking-wider cursor-pointer select-none"
+                  style={{
+                    color: "var(--color-ink-tertiary)",
+                    fontSize: "10px",
+                    width: col.width,
+                    background: "var(--color-surface-raised)",
+                  }}
+                >
+                  {col.label}
+                  <SortIndicator
+                    active={sortKey === col.key}
+                    dir={sortDir}
+                  />
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((entry) => (
+              <tr
+                key={entry.entry_id}
+                onClick={() => router.push(`/entry/${entry.entry_id}`)}
+                className="cursor-pointer transition-colors duration-75"
+                style={{ borderBottom: "1px solid var(--color-rule)" }}
+                onMouseEnter={(e) =>
+                  (e.currentTarget.style.background =
+                    "var(--color-amber-surface)")
+                }
+                onMouseLeave={(e) =>
+                  (e.currentTarget.style.background = "transparent")
+                }
+              >
+                <td
+                  className="px-3 py-2 font-mono font-medium tabular-nums"
+                  style={{ color: "var(--color-ink-secondary)" }}
+                >
+                  {entry.entry_id}
+                </td>
+                <td className="px-3 py-2">
+                  <DomainBadge domain={entry.risk_domain} />
+                </td>
+                <td
+                  className="px-3 py-2 truncate max-w-lg"
+                  style={{ color: "var(--color-ink-secondary)" }}
+                >
+                  {entry.prompt_preview}
+                  {entry.prompt_preview.length >= 150 ? "..." : ""}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}

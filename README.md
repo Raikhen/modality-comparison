@@ -79,9 +79,9 @@ src/
   eval_task.py          Inspect AI evaluation task
   analyze.py            Post-hoc analysis & plotting
   validate.py           Variant file validation CLI
-  domain_templates.json Domain-specific agentic context templates
 dataset.csv             Source entries with adversarial prompts & rubrics
-PROMPT.md               Instructions for variant generation
+scripts/
+  generate_ralphy_tasks.py  Generates per-entry Ralphy task files
 ```
 
 ## Requirements

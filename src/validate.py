@@ -58,7 +58,10 @@ def validate():
 
             if missing:
                 missing_str = ", ".join(f"{t}/{m}" for t, m in sorted(missing))
-                print(f"  {path.name}: {n}/6 variants, missing: {missing_str}")
+                print(
+                    f"  {path.name}: {n}/{len(expected_pairs)} variants, "
+                    f"missing: {missing_str}"
+                )
                 errors += 1
             else:
                 print(f"  {path.name}: {n} variants OK")

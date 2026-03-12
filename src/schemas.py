@@ -4,34 +4,45 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-Tone = Literal["verbatim", "rephrase_1", "rephrase_2"]
-Modality = Literal["plain_text", "plain_text_with_history", "agentic", "agentic_no_history"]
+Tone = Literal["verbatim", "formal", "casual"]
+Modality = Literal[
+    "plain_text", "plain_text_with_history", "agentic_no_history", "agentic"
+]
 
-TONES: list[Tone] = ["verbatim", "rephrase_1", "rephrase_2"]
-MODALITIES: list[Modality] = ["plain_text", "plain_text_with_history", "agentic", "agentic_no_history"]
+TONES: list[Tone] = ["verbatim", "formal", "casual"]
+MODALITIES: list[Modality] = [
+    "plain_text",
+    "plain_text_with_history",
+    "agentic_no_history",
+    "agentic",
+]
 
 
-class PlainTextVariant(BaseModel):
+class Variant(BaseModel):
+    """A single experimental variant.
+
+    Optional fields are populated depending on modality:
+      - plain_text:              prompt only
+      - plain_text_with_history: prompt + conversation_history
+      - agentic_no_history:      prompt + system_prompt + tools + files
+      - agentic:                 all fields
+    """
+
     tone: Tone
-    modality: Modality = "plain_text"
+    modality: Modality
     prompt: str
-
-
-class AgenticVariant(BaseModel):
-    tone: Tone
-    modality: Modality = "agentic"
-    system_prompt: str
-    tools: list[dict]
-    files: dict[str, str]
-    conversation_history: list[dict[str, str]]
-    prompt: str
+    system_prompt: str | None = None
+    tools: list[dict] | None = None
+    files: dict[str, str] | None = None
+    conversation_history: list[dict[str, str]] | None = None
+    tool_responses: dict[str, str] | None = None
 
 
 class EntryVariants(BaseModel):
     entry_id: int
     original_prompt: str
     risk_domain: str
-    variants: list[PlainTextVariant | AgenticVariant]
+    variants: list[Variant]
 
 
 class SampleMetadata(BaseModel, frozen=True):

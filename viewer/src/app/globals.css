@@ -1,0 +1,51 @@
+@import "tailwindcss";
+
+@theme inline {
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+
+  /* surfaces — 1-2% lightness shifts */
+  --color-canvas: #f4f5f7;
+  --color-surface: #ffffff;
+  --color-surface-raised: #f9fafb;
+  --color-surface-inset: #f0f1f3;
+
+  /* ink — text hierarchy */
+  --color-ink: #1a1d23;
+  --color-ink-secondary: #4a4f5c;
+  --color-ink-tertiary: #6b7080;
+  --color-ink-muted: #9ca1ad;
+
+  /* borders — low-opacity separation */
+  --color-rule: rgba(0, 0, 0, 0.06);
+  --color-rule-emphasis: rgba(0, 0, 0, 0.10);
+  --color-rule-strong: rgba(0, 0, 0, 0.15);
+
+  /* accent — amber for focal points */
+  --color-amber: #b45309;
+  --color-amber-muted: #d97706;
+  --color-amber-surface: #fffbeb;
+
+  /* specimen roles */
+  --color-system-surface: #f0f1f3;
+  --color-system-rule: #c9cbd0;
+  --color-user-surface: #f0f4f8;
+  --color-user-rule: #94a3b8;
+  --color-assistant-surface: #f0faf4;
+  --color-assistant-rule: #86c5a0;
+
+  /* code panels */
+  --color-panel: #1e2028;
+  --color-panel-text: #a8b5c4;
+  --color-panel-accent: #7eb8a0;
+}
+
+body {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+}
+
+*:focus-visible {
+  outline: 2px solid var(--color-amber-muted);
+  outline-offset: 1px;
+}
