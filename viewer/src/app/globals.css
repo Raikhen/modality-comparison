@@ -26,6 +26,9 @@
   --color-amber-muted: #d97706;
   --color-amber-surface: #fffbeb;
 
+  /* semantic */
+  --color-required: #c27070;
+
   /* specimen roles */
   --color-system-surface: #f0f1f3;
   --color-system-rule: #c9cbd0;
@@ -48,4 +51,26 @@ body {
 *:focus-visible {
   outline: 2px solid var(--color-amber-muted);
   outline-offset: 1px;
+}
+
+/* Hover utilities for table rows and interactive surfaces */
+@layer utilities {
+  .hover-amber:hover {
+    background: var(--color-amber-surface);
+  }
+  .hover-raised:hover {
+    background: var(--color-surface-raised);
+  }
+  .hover-ink:hover {
+    color: var(--color-ink);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
 }

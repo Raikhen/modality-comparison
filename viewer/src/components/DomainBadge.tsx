@@ -15,7 +15,7 @@ export function DomainBadge({ domain }: { domain: string }) {
 
   return (
     <span
-      className="inline-block px-1.5 py-px text-[10px] font-mono font-medium rounded-sm uppercase tracking-wider"
+      className="inline-block px-1.5 py-px text-[11px] font-mono font-medium rounded-sm uppercase tracking-wider"
       style={{
         background: `hsl(${hue} 25% 93%)`,
         color: `hsl(${hue} 30% 40%)`,

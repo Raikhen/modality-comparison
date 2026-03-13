@@ -40,14 +40,14 @@ export function MessageBubble({
     >
       <div className="flex items-baseline gap-2 mb-1">
         <span
-          className="font-mono text-[10px] font-semibold uppercase tracking-widest"
+          className="font-mono text-[11px] font-semibold uppercase tracking-widest"
           style={{ color: "var(--color-ink-muted)" }}
         >
           {style.label}
         </span>
         {isLastUser && (
           <span
-            className="font-mono text-[10px] font-medium tracking-wide"
+            className="font-mono text-[11px] font-medium tracking-wide"
             style={{ color: "var(--color-amber)" }}
           >
             FINAL PROMPT

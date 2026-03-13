@@ -12,6 +12,7 @@ venv/
 .DS_Store
 
 # Ralphy
+.ralphy/
 .ralphy-sandboxes/
 .ralphy-worktrees/
 

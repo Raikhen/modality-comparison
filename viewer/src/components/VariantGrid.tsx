@@ -16,13 +16,15 @@ export function VariantGrid({ variants }: { variants: Variant[] }) {
         <thead>
           <tr>
             <th
-              className="p-2 text-left font-mono text-[10px] uppercase tracking-widest"
+              className="p-2 text-left font-mono text-[11px] uppercase tracking-widest"
               style={{ color: "var(--color-ink-muted)", width: "80px" }}
-            />
+            >
+              <span className="sr-only">Tone</span>
+            </th>
             {MODALITIES.map((m) => (
               <th
                 key={m}
-                className="p-2 text-center font-mono text-[10px] uppercase tracking-widest min-w-[280px]"
+                className="p-2 text-center font-mono text-[11px] uppercase tracking-widest min-w-[280px]"
                 style={{ color: "var(--color-ink-tertiary)" }}
               >
                 {MODALITY_LABELS[m]}
@@ -37,7 +39,7 @@ export function VariantGrid({ variants }: { variants: Variant[] }) {
               style={{ borderTop: "1px solid var(--color-rule)" }}
             >
               <td
-                className="p-2 font-mono text-[10px] uppercase tracking-widest align-top whitespace-nowrap"
+                className="p-2 font-mono text-[11px] uppercase tracking-widest align-top whitespace-nowrap"
                 style={{ color: "var(--color-ink-tertiary)" }}
               >
                 {TONE_LABELS[t]}
@@ -50,7 +52,7 @@ export function VariantGrid({ variants }: { variants: Variant[] }) {
                       <VariantCard variant={variant} />
                     ) : (
                       <div
-                        className="text-[10px] font-mono italic p-3"
+                        className="text-[11px] font-mono italic p-3"
                         style={{ color: "var(--color-ink-muted)" }}
                       >
                         missing

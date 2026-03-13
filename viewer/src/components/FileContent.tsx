@@ -4,7 +4,7 @@ export function FileContent({ files }: { files: Record<string, string> }) {
       {Object.entries(files).map(([name, content]) => (
         <div key={name}>
           <div
-            className="text-[10px] font-mono uppercase tracking-wider mb-1"
+            className="text-[11px] font-mono uppercase tracking-wider mb-1"
             style={{ color: "var(--color-ink-muted)" }}
           >
             {name}

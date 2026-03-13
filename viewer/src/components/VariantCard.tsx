@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import type { Variant } from "@/lib/types";
+import { MODALITY_LABELS, TONE_LABELS } from "@/lib/types";
 import { MessageThread } from "./MessageThread";
 import { CollapsibleSection } from "./CollapsibleSection";
 import { ToolDefinition } from "./ToolDefinition";
@@ -9,7 +10,8 @@ import { FileContent } from "./FileContent";
 
 export function VariantCard({ variant }: { variant: Variant }) {
   const [expanded, setExpanded] = useState(false);
-  const tools = variant.tools?.filter(() => true) ?? [];
+  const contentId = useId();
+  const tools = variant.tools ?? [];
   const files = variant.files ?? {};
   const toolResponses = variant.tool_responses ?? {};
   const hasTools = tools.length > 0;
@@ -28,46 +30,25 @@ export function VariantCard({ variant }: { variant: Variant }) {
     >
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full px-3 py-2 text-left flex items-center justify-between gap-2 transition-colors duration-75"
+        aria-expanded={expanded}
+        aria-controls={contentId}
+        aria-label={`${TONE_LABELS[variant.tone]} ${MODALITY_LABELS[variant.modality]} variant`}
+        className="w-full px-3 py-2 text-left transition-colors duration-75 cursor-pointer hover-raised"
         style={{
           background: expanded ? "var(--color-surface-raised)" : "transparent",
         }}
-        onMouseEnter={(e) =>
-          (e.currentTarget.style.background = "var(--color-surface-raised)")
-        }
-        onMouseLeave={(e) =>
-          (e.currentTarget.style.background =
-            expanded ? "var(--color-surface-raised)" : "transparent")
-        }
       >
-        <span />
-        <svg
-          className="w-2 h-2 flex-shrink-0 transition-transform duration-100"
-          viewBox="0 0 10 10"
-          fill="currentColor"
-          style={{
-            color: "var(--color-ink-muted)",
-            transform: expanded ? "rotate(90deg)" : "rotate(0deg)",
-          }}
+        <p
+          className="text-[11px] leading-relaxed line-clamp-2"
+          style={{ color: "var(--color-ink-tertiary)" }}
         >
-          <path d="M3 1L8 5L3 9Z" />
-        </svg>
+          {variant.prompt.slice(0, 180)}
+          {variant.prompt.length > 180 ? "..." : ""}
+        </p>
       </button>
 
-      {!expanded && (
-        <div className="px-3 pb-2">
-          <p
-            className="text-[11px] leading-relaxed line-clamp-2"
-            style={{ color: "var(--color-ink-tertiary)" }}
-          >
-            {variant.prompt.slice(0, 180)}
-            {variant.prompt.length > 180 ? "..." : ""}
-          </p>
-        </div>
-      )}
-
       {expanded && (
-        <div className="px-3 pb-3 space-y-2">
+        <div id={contentId} className="px-3 pb-3 space-y-2">
           <MessageThread variant={variant} />
 
           {hasTools && (
@@ -94,7 +75,7 @@ export function VariantCard({ variant }: { variant: Variant }) {
                 {Object.entries(toolResponses).map(([name, response]) => (
                   <div key={name}>
                     <div
-                      className="text-[10px] font-mono uppercase tracking-wider mb-1"
+                      className="text-[11px] font-mono uppercase tracking-wider mb-1"
                       style={{ color: "var(--color-ink-muted)" }}
                     >
                       {name}

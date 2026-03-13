@@ -15,6 +15,7 @@ function SortIndicator({ active, dir }: { active: boolean; dir: SortDir }) {
       className="inline-block ml-1 w-2.5 h-3 align-middle"
       viewBox="0 0 10 14"
       fill="currentColor"
+      aria-hidden="true"
       style={{ color: active ? "var(--color-ink-secondary)" : "var(--color-ink-muted)" }}
     >
       <path
@@ -53,6 +54,10 @@ export function EntryTable({
     }
   };
 
+  const navigateToEntry = (entryId: number) => {
+    router.push(`/entry/${entryId}`);
+  };
+
   const filtered = entries.filter((e) => {
     if (domain && e.risk_domain !== domain) return false;
     if (
@@ -80,11 +85,16 @@ export function EntryTable({
     { key: "prompt_preview", label: "Prompt" },
   ];
 
+  const ariaSort = (key: SortKey): "ascending" | "descending" | "none" => {
+    if (sortKey !== key) return "none";
+    return sortDir === "asc" ? "ascending" : "descending";
+  };
+
   return (
     <div>
       <FilterBar domains={domains} />
       <div
-        className="font-mono text-[10px] uppercase tracking-wider mb-2"
+        className="font-mono text-[11px] uppercase tracking-wider mb-2"
         style={{ color: "var(--color-ink-muted)" }}
       >
         {sorted.length} of {entries.length} entries
@@ -96,17 +106,25 @@ export function EntryTable({
           border: "1px solid var(--color-rule)",
         }}
       >
-        <table className="w-full text-xs">
+        <table className="w-full text-xs" role="grid">
           <thead>
             <tr style={{ borderBottom: "1px solid var(--color-rule-emphasis)" }}>
               {columns.map((col) => (
                 <th
                   key={col.key}
                   onClick={() => toggleSort(col.key)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      toggleSort(col.key);
+                    }
+                  }}
+                  tabIndex={0}
+                  aria-sort={ariaSort(col.key)}
                   className="px-3 py-2 text-left font-mono font-medium uppercase tracking-wider cursor-pointer select-none"
                   style={{
                     color: "var(--color-ink-tertiary)",
-                    fontSize: "10px",
+                    fontSize: "11px",
                     width: col.width,
                     background: "var(--color-surface-raised)",
                   }}
@@ -121,38 +139,56 @@ export function EntryTable({
             </tr>
           </thead>
           <tbody>
-            {sorted.map((entry) => (
-              <tr
-                key={entry.entry_id}
-                onClick={() => router.push(`/entry/${entry.entry_id}`)}
-                className="cursor-pointer transition-colors duration-75"
-                style={{ borderBottom: "1px solid var(--color-rule)" }}
-                onMouseEnter={(e) =>
-                  (e.currentTarget.style.background =
-                    "var(--color-amber-surface)")
-                }
-                onMouseLeave={(e) =>
-                  (e.currentTarget.style.background = "transparent")
-                }
-              >
+            {sorted.length === 0 ? (
+              <tr>
                 <td
-                  className="px-3 py-2 font-mono font-medium tabular-nums"
-                  style={{ color: "var(--color-ink-secondary)" }}
+                  colSpan={3}
+                  className="px-3 py-8 text-center font-mono text-xs"
+                  style={{ color: "var(--color-ink-muted)" }}
                 >
-                  {entry.entry_id}
-                </td>
-                <td className="px-3 py-2">
-                  <DomainBadge domain={entry.risk_domain} />
-                </td>
-                <td
-                  className="px-3 py-2 truncate max-w-lg"
-                  style={{ color: "var(--color-ink-secondary)" }}
-                >
-                  {entry.prompt_preview}
-                  {entry.prompt_preview.length >= 150 ? "..." : ""}
+                  No entries match your search.
                 </td>
               </tr>
-            ))}
+            ) : (
+              sorted.map((entry, i) => (
+                <tr
+                  key={entry.entry_id}
+                  role="link"
+                  tabIndex={0}
+                  aria-label={`Entry ${entry.entry_id}, ${entry.risk_domain}`}
+                  onClick={() => navigateToEntry(entry.entry_id)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      navigateToEntry(entry.entry_id);
+                    }
+                  }}
+                  className="cursor-pointer transition-colors duration-75 hover-amber"
+                  style={
+                    i < sorted.length - 1
+                      ? { borderBottom: "1px solid var(--color-rule)" }
+                      : undefined
+                  }
+                >
+                  <td
+                    className="px-3 py-2 font-mono font-medium tabular-nums"
+                    style={{ color: "var(--color-ink-secondary)" }}
+                  >
+                    {entry.entry_id}
+                  </td>
+                  <td className="px-3 py-2">
+                    <DomainBadge domain={entry.risk_domain} />
+                  </td>
+                  <td
+                    className="px-3 py-2 truncate max-w-lg"
+                    style={{ color: "var(--color-ink-secondary)" }}
+                  >
+                    {entry.prompt_preview}
+                    {entry.prompt_preview.length >= 150 ? "..." : ""}
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>

@@ -32,7 +32,7 @@ export function ToolDefinition({ tool }: { tool: ToolDef }) {
                 : {schema.type}
               </span>
               {required.has(name) && (
-                <span className="ml-1" style={{ color: "#c27070" }}>
+                <span className="ml-1" style={{ color: "var(--color-required)" }}>
                   *
                 </span>
               )}

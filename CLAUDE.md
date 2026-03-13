@@ -172,3 +172,59 @@ and should not materially affect guardrail behavior.
 - `logs/` — evaluation logs
 - `figures/` — generated plots
 - `__pycache__/` — bytecode
+
+## Design Context
+
+### Users
+
+Safety researchers on a small team verifying that experimental variants are
+correctly assembled before running expensive eval batches. They open the viewer
+at their desk during experiment preparation — scanning entries, drilling into
+specific conditions, comparing tones side by side, cross-referencing against raw
+JSON. The work is forensic and detail-oriented: they need to trust that what
+they see is exactly what the model will receive.
+
+### Brand Personality
+
+Instrumental, precise, receding. The interface is a research tool, not a
+product. It should feel like looking through a well-calibrated instrument — the
+viewer disappears and the data speaks.
+
+### Aesthetic Direction
+
+- **Reference**: Vercel dashboard — dense, monospace-forward, developer-oriented
+- **Visual tone**: Clinical. Cool grays, minimal chrome, tight spacing. The
+  4x3 experimental matrix (tone x modality) is the product's signature element
+  and should read like a specimen tray, not a card layout
+- **Theme**: Light mode only
+- **Typography**: Geist Mono for all structural text (nav, labels, headers,
+  badges, axes). Geist Sans for body/message content
+- **Color**: Slate ink hierarchy (4 levels). Single amber accent for focal
+  points (final prompt indicator, hover states, active controls). Domain badges
+  desaturated via HSL hue-shifting at low saturation. No bright or saturated
+  colors competing with specimen content
+- **Depth**: Borders only. No shadows. Thin, low-opacity rgba borders at three
+  intensity levels. Surfaces distinguished by 1-2% lightness shifts
+- **Radius**: rounded-sm (2px) everywhere — sharp, technical
+
+### Design Principles
+
+1. **Fidelity over aesthetics** — The viewer must faithfully reproduce what the
+   model receives. Every message thread mirrors `_build_sample()` exactly.
+   Visual choices never obscure or reinterpret the data.
+
+2. **Data density over whitespace** — Researchers scan 137+ entries and 12
+   conditions per entry. Tight spacing, small type, and compact cards let more
+   specimens fit on screen without scrolling.
+
+3. **The interface recedes** — No decorative elements, no emoji, no
+   abbreviations that require learning. Labels are readable words. Controls are
+   quiet until interacted with. The viewer is a pane of glass over the data.
+
+4. **One accent, used with intention** — Amber marks exactly one thing: the
+   point of interest (final prompt, active state, hover). Everything else is
+   neutral. Color means something or it isn't used.
+
+5. **Consistency is non-negotiable** — Every surface, border, and text color
+   comes from the token system in `globals.css`. No ad-hoc hex values. No
+   mixed depth strategies. No exceptions.

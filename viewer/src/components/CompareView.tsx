@@ -18,7 +18,7 @@ export function CompareView({ variants }: { variants: Variant[] }) {
     <div>
       <div className="flex items-center gap-2 mb-4">
         <span
-          className="font-mono text-[10px] uppercase tracking-widest"
+          className="font-mono text-[11px] uppercase tracking-widest"
           style={{ color: "var(--color-ink-muted)" }}
         >
           Modality
@@ -46,7 +46,7 @@ export function CompareView({ variants }: { variants: Variant[] }) {
         ))}
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         {TONES.map((tone) => {
           const variant = byTone.get(tone);
           if (!variant) return null;
@@ -61,7 +61,7 @@ export function CompareView({ variants }: { variants: Variant[] }) {
               }}
             >
               <h3
-                className="font-mono text-[10px] uppercase tracking-widest mb-3"
+                className="font-mono text-[11px] uppercase tracking-widest mb-3"
                 style={{ color: "var(--color-ink-tertiary)" }}
               >
                 {TONE_LABELS[tone]}
@@ -76,6 +76,14 @@ export function CompareView({ variants }: { variants: Variant[] }) {
           );
         })}
       </div>
+      {byTone.size === 0 && (
+        <div
+          className="py-8 text-center font-mono text-xs"
+          style={{ color: "var(--color-ink-muted)" }}
+        >
+          No variants for this modality.
+        </div>
+      )}
     </div>
   );
 }
