@@ -1,0 +1,31 @@
+{
+  "seed": 42,
+  "entry_ids": [
+    531,
+    493,
+    109,
+    679,
+    356,
+    48,
+    1038,
+    654,
+    676,
+    448,
+    598,
+    984,
+    403,
+    392,
+    476,
+    751,
+    131,
+    124,
+    408,
+    1028
+  ],
+  "models": {
+    "gemini": "google/gemini-3.1-flash-lite-preview",
+    "deepseek": "deepseek/deepseek-v3.2"
+  },
+  "generation_method": "scaffolding_v2__full_adversarial_prompt",
+  "created": "2026-03-16T20:39:15.662480+00:00"
+}
