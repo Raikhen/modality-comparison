@@ -60,7 +60,8 @@ export function EntryTable({
   };
 
   const navigateToEntry = (entryId: number) => {
-    router.push(`/entry/${entryId}`);
+    const qs = searchParams.toString();
+    router.push(`/entry/${entryId}${qs ? `?${qs}` : ""}`);
   };
 
   const filtered = entries.filter((e) => {

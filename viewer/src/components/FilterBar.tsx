@@ -75,19 +75,37 @@ export function FilterBar({
         ))}
       </select>
       {hasBenchmark && (
-        <button
-          onClick={() => updateParams("benchmark", benchmarkOnly ? "" : "1")}
-          className="px-3 py-1.5 font-mono text-[11px] rounded-sm transition-colors duration-75 whitespace-nowrap"
-          style={{
-            background: benchmarkOnly ? "var(--color-amber-surface)" : "var(--color-surface)",
-            color: benchmarkOnly ? "var(--color-amber)" : "var(--color-ink-muted)",
-            border: benchmarkOnly
-              ? "1px solid var(--color-amber-rule)"
-              : "1px solid var(--color-rule-strong)",
-          }}
-        >
-          Benchmark only
-        </button>
+        <label className="flex items-center gap-2 cursor-pointer whitespace-nowrap select-none">
+          <span
+            className="font-mono text-[11px] transition-colors duration-75"
+            style={{
+              color: benchmarkOnly ? "var(--color-amber)" : "var(--color-ink-muted)",
+            }}
+          >
+            Benchmark only
+          </span>
+          <button
+            role="switch"
+            aria-checked={benchmarkOnly}
+            aria-label="Benchmark only"
+            onClick={() => updateParams("benchmark", benchmarkOnly ? "" : "1")}
+            className="relative inline-flex items-center rounded-full transition-colors duration-75"
+            style={{
+              width: "28px",
+              height: "16px",
+              background: benchmarkOnly ? "var(--color-amber)" : "var(--color-rule-strong)",
+            }}
+          >
+            <span
+              className="block rounded-full bg-white transition-transform duration-75"
+              style={{
+                width: "12px",
+                height: "12px",
+                transform: benchmarkOnly ? "translateX(14px)" : "translateX(2px)",
+              }}
+            />
+          </button>
+        </label>
       )}
     </div>
   );
