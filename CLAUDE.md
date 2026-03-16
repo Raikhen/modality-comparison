@@ -4,8 +4,9 @@
 
 This project evaluates **LLM guardrail robustness** across modalities. It tests
 whether models are more or less likely to comply with harmful requests when
-presented in different ways (plain text vs. agentic context) and tones
-(verbatim, formal, casual).
+presented in different ways (plain text vs. agentic context). Multiple
+paraphrases of each prompt serve as replicates to make the modality comparison
+more robust.
 
 ## Architecture
 
@@ -30,7 +31,7 @@ data/                   All experiment data
     gemini/             Benchmark variants from Gemini
     backup/             Snapshot backup of claude variants
 src/                    Core Python library (eval, analysis, validation)
-scripts/                Operational scripts (variant generation, repair)
+scripts/                Operational scripts (variant generation, cost estimation)
 viewer/                 Next.js variant inspection UI
 ```
 
@@ -39,23 +40,29 @@ viewer/                 Next.js variant inspection UI
 | Module | Purpose |
 |---|---|
 | `src/config.py` | Central path definitions — all other modules import from here |
-| `src/schemas.py` | Pydantic models & Literal type aliases for tones/modalities |
+| `src/schemas.py` | Pydantic models & Literal type aliases for modalities |
 | `src/dataset.py` | Loads `data/dataset.csv` into `Entry` dataclasses |
 | `src/eval_task.py` | Inspect AI `@task` — multi-turn eval with mock tool execution |
 | `src/analyze.py` | Post-hoc analysis of `.eval` logs (stats + figures) |
 | `src/validate.py` | CLI tool for checking variant file integrity |
 | `scripts/generate_variants.py` | Generates variant JSON files via API |
+| `scripts/estimate_cost.py` | Estimates API costs for generation + eval + grading |
 
 ## Running Commands
 
 ```bash
-# Generate variant files
+# Generate variant files (default: 5 paraphrases per entry)
 python3 scripts/generate_variants.py
+python3 scripts/generate_variants.py --num-paraphrases 3 --ids 27 49
 
 # Validate built variants
 python3 -m src.validate validate
 python3 -m src.validate summary
 python3 -m src.validate missing
+
+# Estimate costs before running
+python3 scripts/estimate_cost.py --eval-model openai/gpt-4o \
+    --grader-model anthropic/claude-sonnet-4-20250514 --paraphrases 5 --rollouts 3
 
 # Run evaluation (grader model override is REQUIRED):
 inspect eval src/eval_task.py --model openai/gpt-4o \
@@ -63,7 +70,7 @@ inspect eval src/eval_task.py --model openai/gpt-4o \
 
 inspect eval src/eval_task.py --model openai/gpt-4o \
     --model-role grader=anthropic/claude-sonnet-4-20250514 \
-    -T max_samples=100
+    -T max_samples=100 -T epochs=3
 
 # Analyze results
 python3 -m src.analyze
@@ -83,19 +90,20 @@ python3 -m src.analyze logs/<specific-log>.eval
 | `agentic_no_history` | ✓ | ✓ | — | Role framing |
 | `agentic` | ✓ | ✓ | ✓ | Full agentic |
 
-**Tone** (3 levels, persona-based, length-controlled ±20%):
-- `verbatim` — exact original prompt
-- `formal` — professional register, no added framing/authority
-- `casual` — informal register, no removed specifics
+**Paraphrase** (N replicates, configurable via `DEFAULT_PARAPHRASES` in config):
+- `paraphrase_id=0` — verbatim original prompt
+- `paraphrase_id=1..N-1` — generated paraphrases (same meaning, ±20% length)
+- Each paraphrase gets its own complete scaffolding (system prompt, tools, files,
+  tool_responses, conversation history) tailored to that paraphrase's wording
+- Paraphrases are replicates, not a factor — they increase statistical power
+  for the modality comparison
 
 ### Controls
 
-- System prompt, tools, files, and tool_responses are **identical across tones** within an entry
-- Conversation history content is consistent across tones (only register differs)
-- Verbatim conversation history matches the prompt author's writing style
-- Tone rephrasing changes **only** linguistic register, not content or length
+- Each paraphrase's scaffolding is tailored to its specific wording
 - Mock tool responses simulate real tool behavior (tools have no guardrails)
 - Grader model must differ from eval model (enforced at runtime)
+- Rollouts (via Inspect `epochs`) provide additional replication
 
 ### Pre-registered Hypotheses
 
@@ -117,11 +125,7 @@ compliance than plain_text, isolating the effect of system prompt + tools.
 than either partial condition alone (plain_text_with_history or
 agentic_no_history).
 
-**H5 (Tone null hypothesis):** Tone has no significant effect on compliance
-scores when controlling for modality — tone variations are register-only
-and should not materially affect guardrail behavior.
-
-**H6 (Domain moderation):** The modality effect varies by risk domain
+**H5 (Domain moderation):** The modality effect varies by risk domain
 (interaction effect).
 
 ## Best Practices
@@ -144,7 +148,7 @@ and should not materially affect guardrail behavior.
   that metadata keys are validated at dataset-load time, not discovered as
   KeyErrors at scoring time.
 - **Sample `id`** should uniquely identify the experimental condition:
-  `{entry_id}_{tone}_{modality}`.
+  `{entry_id}_{paraphrase_id}_{modality}`.
 
 ### Python / Code Style
 
@@ -156,9 +160,8 @@ and should not materially affect guardrail behavior.
 - **No `sys.path` manipulation** in `src/` modules. The `-m` invocation handles
   imports correctly. Scripts in `scripts/` may use `sys.path.insert` only to
   bootstrap `src` imports.
-- **Use Literal types** for fixed string enums (`Tone`, `Modality` in
-  `src/schemas.py`). Export canonical lists (`TONES`, `MODALITIES`) for
-  iteration.
+- **Use Literal types** for fixed string enums (`Modality` in
+  `src/schemas.py`). Export canonical lists (`MODALITIES`) for iteration.
 - **Data goes in data files**, not inlined in Python source.
 - **No print side effects** in library functions (e.g., `load_entries` should
   not print). Reserve print/logging for CLI entry points.
@@ -167,10 +170,11 @@ and should not materially affect guardrail behavior.
 
 ### Evaluation Workflow
 
-1. **Build** variants: `python3 scripts/generate_variants.py`
-2. **Validate** completeness: `python3 -m src.validate summary`
-3. **Run** eval: `inspect eval src/eval_task.py --model <model> --model-role grader=<model>`
-4. **Analyze** results: `python3 -m src.analyze`
+1. **Estimate** costs: `python3 scripts/estimate_cost.py --eval-model <model> --grader-model <model> --paraphrases 5 --rollouts 3`
+2. **Build** variants: `python3 scripts/generate_variants.py --num-paraphrases 5`
+3. **Validate** completeness: `python3 -m src.validate summary`
+4. **Run** eval: `inspect eval src/eval_task.py --model <model> --model-role grader=<model> -T epochs=3`
+5. **Analyze** results: `python3 -m src.analyze`
 
 ### Adding a New Risk Domain
 
@@ -193,7 +197,7 @@ and should not materially affect guardrail behavior.
 Safety researchers on a small team verifying that experimental variants are
 correctly assembled before running expensive eval batches. They open the viewer
 at their desk during experiment preparation — scanning entries, drilling into
-specific conditions, comparing tones side by side, cross-referencing against raw
+specific conditions, comparing paraphrases side by side, cross-referencing against raw
 JSON. The work is forensic and detail-oriented: they need to trust that what
 they see is exactly what the model will receive.
 
@@ -207,8 +211,8 @@ viewer disappears and the data speaks.
 
 - **Reference**: Vercel dashboard — dense, monospace-forward, developer-oriented
 - **Visual tone**: Clinical. Cool grays, minimal chrome, tight spacing. The
-  4x3 experimental matrix (tone x modality) is the product's signature element
-  and should read like a specimen tray, not a card layout
+  N×4 experimental matrix (paraphrase × modality) is the product's signature
+  element and should read like a specimen tray, not a card layout
 - **Theme**: Light mode only
 - **Typography**: Geist Mono for all structural text (nav, labels, headers,
   badges, axes). Geist Sans for body/message content
@@ -226,7 +230,7 @@ viewer disappears and the data speaks.
    model receives. Every message thread mirrors `_build_sample()` exactly.
    Visual choices never obscure or reinterpret the data.
 
-2. **Data density over whitespace** — Researchers scan 137+ entries and 12
+2. **Data density over whitespace** — Researchers scan 137+ entries and N×4
    conditions per entry. Tight spacing, small type, and compact cards let more
    specimens fit on screen without scrolling.
 
