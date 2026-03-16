@@ -38,12 +38,11 @@ from openai import AsyncOpenAI
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from src.config import DATASET_PATH, VARIANTS_DIR  # noqa: E402
 from src.schemas import MODALITIES, TONES, EntryVariants  # noqa: E402
 
-DATASET_PATH = PROJECT_ROOT / "dataset.csv"
-VARIANTS_DIR = PROJECT_ROOT / "variants"
 CHECKPOINTS_DIR = PROJECT_ROOT / ".generate_checkpoints"
-EXAMPLE_PATH = PROJECT_ROOT / "variants" / "27.json"
+EXAMPLE_PATH = VARIANTS_DIR / "27.json"
 
 PRIMARY_MODEL = "google/gemini-3.1-flash-lite-preview"
 FALLBACK_MODEL = "google/gemini-2.5-flash"
@@ -426,13 +425,14 @@ async def call_api(
         return result, PRIMARY_MODEL
 
     # Fallback
-    log.warning(f"[{label}] Primary model failed, falling back to {FALLBACK_MODEL}")
-    result = await _call_model(
-        client, FALLBACK_MODEL, system, user,
-        max_retries=max_retries, label=label, json_mode=json_mode,
-    )
-    if result:
-        return result, FALLBACK_MODEL
+    if FALLBACK_MODEL:
+        log.warning(f"[{label}] Primary model failed, falling back to {FALLBACK_MODEL}")
+        result = await _call_model(
+            client, FALLBACK_MODEL, system, user,
+            max_retries=max_retries, label=label, json_mode=json_mode,
+        )
+        if result:
+            return result, FALLBACK_MODEL
 
     return None, None
 
@@ -721,6 +721,15 @@ async def generate_entry(
 
 
 async def run(args: argparse.Namespace):
+    global PRIMARY_MODEL, FALLBACK_MODEL, VARIANTS_DIR, CHECKPOINTS_DIR
+    if args.primary_model:
+        PRIMARY_MODEL = args.primary_model
+    if args.no_fallback:
+        FALLBACK_MODEL = None
+    if args.output_dir:
+        VARIANTS_DIR = Path(args.output_dir)
+        CHECKPOINTS_DIR = VARIANTS_DIR / ".checkpoints"
+
     entries = load_entries()
     done = valid_ids()
 
@@ -758,7 +767,8 @@ async def run(args: argparse.Namespace):
         f"(max parallel: {args.max_parallel})"
     )
     log.info(f"Already done: {len(done)} entries")
-    log.info(f"Primary model: {PRIMARY_MODEL}, fallback: {FALLBACK_MODEL}")
+    fallback_str = FALLBACK_MODEL or "disabled"
+    log.info(f"Primary model: {PRIMARY_MODEL}, fallback: {fallback_str}")
 
     client = _make_client()
     semaphore = asyncio.Semaphore(args.max_parallel)
@@ -792,6 +802,23 @@ def main():
         "--retry-failed",
         action="store_true",
         help="Retry only previously failed entries",
+    )
+    parser.add_argument(
+        "--primary-model",
+        type=str,
+        default=None,
+        help=f"Override primary model (default: {PRIMARY_MODEL})",
+    )
+    parser.add_argument(
+        "--no-fallback",
+        action="store_true",
+        help="Disable fallback model — only use primary",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        default=None,
+        help="Override output directory for variant files",
     )
     args = parser.parse_args()
 

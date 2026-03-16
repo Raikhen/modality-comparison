@@ -17,7 +17,10 @@ import json
 import sys
 from pathlib import Path
 
-VARIANTS_DIR = Path(__file__).resolve().parent.parent / "variants"
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
+
+from src.config import VARIANTS_DIR  # noqa: E402
 
 TONE_MAP = {"rephrase_1": "formal", "rephrase_2": "casual"}
 AGENTIC_FIELDS = ("system_prompt", "tools", "files", "tool_responses")

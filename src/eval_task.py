@@ -396,8 +396,8 @@ def modality_eval(
     samples = _load_variants(max_samples=max_samples, max_entries=max_entries)
     if not samples:
         raise ValueError(
-            "No variant files found in variants/. "
-            "Generate variants first using PROMPT.md with Claude Code"
+            "No variant files found in variants/claude/. "
+            "Generate variants first using scripts/generate_variants.py"
         )
 
     return Task(

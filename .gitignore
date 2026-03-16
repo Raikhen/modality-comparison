@@ -11,12 +11,9 @@ venv/
 # OS
 .DS_Store
 
-# Ralphy
-.ralphy/
-.ralphy-sandboxes/
-.ralphy-worktrees/
-
 # Generated data
+data/variants/
+.generate_checkpoints/
 logs/
 figures/
 
