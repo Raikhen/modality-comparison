@@ -25,6 +25,7 @@
   --color-amber: #b45309;
   --color-amber-muted: #d97706;
   --color-amber-surface: #fffbeb;
+  --color-amber-rule: rgba(180, 83, 9, 0.25);
 
   /* semantic */
   --color-required: #c27070;

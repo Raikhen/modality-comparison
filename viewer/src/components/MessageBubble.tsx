@@ -1,3 +1,7 @@
+"use client";
+
+import { useRef, useEffect } from "react";
+
 const ROLE_STYLES: Record<
   string,
   { bg: string; border: string; label: string }
@@ -23,12 +27,22 @@ export function MessageBubble({
   role,
   content,
   isLastUser = false,
+  onContentChange,
 }: {
   role: string;
   content: string;
   isLastUser?: boolean;
+  onContentChange?: (content: string) => void;
 }) {
   const style = ROLE_STYLES[role] ?? ROLE_STYLES.user;
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+      textareaRef.current.style.height = textareaRef.current.scrollHeight + "px";
+    }
+  }, [content]);
 
   return (
     <div
@@ -54,19 +68,40 @@ export function MessageBubble({
           </span>
         )}
       </div>
-      <div
-        className={`text-xs leading-relaxed whitespace-pre-wrap break-words ${
-          role === "system" ? "font-mono" : ""
-        }`}
-        style={{
-          color:
-            role === "system"
-              ? "var(--color-ink-secondary)"
-              : "var(--color-ink)",
-        }}
-      >
-        {content}
-      </div>
+      {onContentChange ? (
+        <textarea
+          ref={textareaRef}
+          value={content}
+          onChange={(e) => {
+            onContentChange(e.target.value);
+            e.target.style.height = "auto";
+            e.target.style.height = e.target.scrollHeight + "px";
+          }}
+          className={`w-full text-xs leading-relaxed whitespace-pre-wrap break-words resize-none bg-transparent border-0 p-0 outline-none ${
+            role === "system" ? "font-mono" : ""
+          }`}
+          style={{
+            color:
+              role === "system"
+                ? "var(--color-ink-secondary)"
+                : "var(--color-ink)",
+          }}
+        />
+      ) : (
+        <div
+          className={`text-xs leading-relaxed whitespace-pre-wrap break-words ${
+            role === "system" ? "font-mono" : ""
+          }`}
+          style={{
+            color:
+              role === "system"
+                ? "var(--color-ink-secondary)"
+                : "var(--color-ink)",
+          }}
+        >
+          {content}
+        </div>
+      )}
     </div>
   );
 }

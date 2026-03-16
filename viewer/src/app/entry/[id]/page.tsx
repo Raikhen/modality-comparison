@@ -1,11 +1,15 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { use, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import type { EntryVariants } from "@/lib/types";
+import type { EntryVariants, Tone, Modality, VariantPatch, Source } from "@/lib/types";
+import { SOURCE_LABELS } from "@/lib/types";
 import { DomainBadge } from "@/components/DomainBadge";
 import { VariantGrid } from "@/components/VariantGrid";
 import { CompareView } from "@/components/CompareView";
+import { BenchmarkCompare } from "@/components/BenchmarkCompare";
+
+type View = "grid" | "compare" | "benchmark";
 
 export default function EntryPage({
   params,
@@ -16,12 +20,31 @@ export default function EntryPage({
   const [entry, setEntry] = useState<EntryVariants | null | undefined>(
     undefined
   );
-  const [view, setView] = useState<"grid" | "compare">("grid");
+  const [benchmarkSources, setBenchmarkSources] = useState<Source[]>([]);
+  const [availableSources, setAvailableSources] = useState<Source[]>([]);
+  const [source, setSource] = useState<Source | null>(null);
+  const [view, setView] = useState<View>("grid");
 
+  // Load source metadata
   useEffect(() => {
+    async function loadMeta() {
+      const res = await fetch(`/api/entry/${id}?meta=sources`);
+      if (res.ok) {
+        const data = await res.json();
+        setBenchmarkSources(data.benchmark_sources ?? []);
+        setAvailableSources(data.available_sources ?? ["production"]);
+        setSource((prev) => prev ?? data.default_source ?? "production");
+      }
+    }
+    loadMeta();
+  }, [id]);
+
+  // Load entry data for current source
+  useEffect(() => {
+    if (!source) return;
     let cancelled = false;
     async function load() {
-      const res = await fetch(`/api/entry/${id}`);
+      const res = await fetch(`/api/entry/${id}?source=${source}`);
       if (cancelled) return;
       if (!res.ok) {
         setEntry(null);
@@ -33,7 +56,35 @@ export default function EntryPage({
     return () => {
       cancelled = true;
     };
-  }, [id]);
+  }, [id, source]);
+
+  const saveVariant = useCallback(
+    async (tone: Tone, modality: Modality, patch: VariantPatch) => {
+      const res = await fetch(`/api/entry/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tone, modality, patch }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error ?? "Save failed");
+      }
+      const updated: EntryVariants = await res.json();
+      setEntry(updated);
+    },
+    [id]
+  );
+
+  const hasBenchmark = benchmarkSources.length >= 2;
+  const views: View[] = hasBenchmark
+    ? ["grid", "compare", "benchmark"]
+    : ["grid", "compare"];
+
+  const viewLabels: Record<View, string> = {
+    grid: "Grid",
+    compare: "Compare",
+    benchmark: "Benchmark",
+  };
 
   if (entry === undefined) {
     return (
@@ -93,34 +144,87 @@ export default function EntryPage({
         </p>
       </div>
 
-      <div className="flex gap-2 mb-4">
-        {(["grid", "compare"] as const).map((v) => (
-          <button
-            key={v}
-            onClick={() => setView(v)}
-            className="px-3 py-1 font-mono text-[11px] rounded-sm transition-colors duration-75"
-            style={{
-              background:
-                view === v ? "var(--color-ink)" : "var(--color-surface)",
-              color:
-                view === v
-                  ? "var(--color-surface)"
-                  : "var(--color-ink-secondary)",
-              border:
-                view === v
-                  ? "1px solid var(--color-ink)"
-                  : "1px solid var(--color-rule-emphasis)",
-            }}
-          >
-            {v === "grid" ? "Grid" : "Compare"}
-          </button>
-        ))}
+      <div className="flex items-center gap-4 mb-4">
+        <div className="flex gap-2">
+          {views.map((v) => (
+            <button
+              key={v}
+              onClick={() => setView(v)}
+              className="px-3 py-1 font-mono text-[11px] rounded-sm transition-colors duration-75"
+              style={{
+                background:
+                  view === v ? "var(--color-ink)" : "var(--color-surface)",
+                color:
+                  view === v
+                    ? "var(--color-surface)"
+                    : "var(--color-ink-secondary)",
+                border:
+                  view === v
+                    ? "1px solid var(--color-ink)"
+                    : "1px solid var(--color-rule-emphasis)",
+              }}
+            >
+              {viewLabels[v]}
+            </button>
+          ))}
+        </div>
+
+        {view !== "benchmark" && hasBenchmark && (
+          <>
+            <div
+              style={{
+                width: "1px",
+                height: "18px",
+                background: "var(--color-rule-emphasis)",
+              }}
+            />
+            <div className="flex items-center gap-2">
+              <span
+                className="font-mono text-[11px] uppercase tracking-widest"
+                style={{ color: "var(--color-ink-muted)" }}
+              >
+                Source
+              </span>
+              {availableSources.map((s) => (
+                <button
+                  key={s}
+                  onClick={() => setSource(s)}
+                  className="px-2 py-0.5 font-mono text-[11px] rounded-sm transition-colors duration-75"
+                  style={{
+                    background:
+                      source === s
+                        ? "var(--color-surface-inset)"
+                        : "transparent",
+                    color:
+                      source === s
+                        ? "var(--color-ink)"
+                        : "var(--color-ink-muted)",
+                    border:
+                      source === s
+                        ? "1px solid var(--color-rule-strong)"
+                        : "1px solid transparent",
+                  }}
+                >
+                  {SOURCE_LABELS[s]}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
       </div>
 
       {view === "grid" ? (
-        <VariantGrid variants={entry.variants} />
+        <VariantGrid
+          variants={entry.variants}
+          onSave={source === "production" ? saveVariant : undefined}
+        />
+      ) : view === "compare" ? (
+        <CompareView
+          variants={entry.variants}
+          onSave={source === "production" ? saveVariant : undefined}
+        />
       ) : (
-        <CompareView variants={entry.variants} />
+        <BenchmarkCompare entryId={entry.entry_id} />
       )}
     </div>
   );

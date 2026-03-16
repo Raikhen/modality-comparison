@@ -5,6 +5,14 @@ export type Modality =
   | "agentic_no_history"
   | "agentic";
 
+export type Source = "production" | "gemini" | "deepseek";
+
+export const SOURCE_LABELS: Record<Source, string> = {
+  production: "Production",
+  gemini: "Gemini",
+  deepseek: "DeepSeek",
+};
+
 export const TONES: Tone[] = ["verbatim", "formal", "casual"];
 export const MODALITIES: Modality[] = [
   "plain_text",
@@ -58,4 +66,15 @@ export interface EntrySummary {
   entry_id: number;
   risk_domain: string;
   prompt_preview: string;
+  benchmark_sources?: Source[];
 }
+
+export type VariantPatch = Partial<
+  Pick<Variant, "prompt" | "system_prompt" | "conversation_history" | "tools">
+>;
+
+export type SaveVariantFn = (
+  tone: Tone,
+  modality: Modality,
+  patch: VariantPatch
+) => Promise<void>;

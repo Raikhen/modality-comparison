@@ -1,10 +1,16 @@
 "use client";
 
-import type { Variant } from "@/lib/types";
+import type { Variant, SaveVariantFn } from "@/lib/types";
 import { TONES, MODALITIES, MODALITY_LABELS, TONE_LABELS } from "@/lib/types";
 import { VariantCard } from "./VariantCard";
 
-export function VariantGrid({ variants }: { variants: Variant[] }) {
+export function VariantGrid({
+  variants,
+  onSave,
+}: {
+  variants: Variant[];
+  onSave?: SaveVariantFn;
+}) {
   const lookup = new Map<string, Variant>();
   for (const v of variants) {
     lookup.set(`${v.tone}_${v.modality}`, v);
@@ -49,7 +55,7 @@ export function VariantGrid({ variants }: { variants: Variant[] }) {
                 return (
                   <td key={m} className="p-2 align-top">
                     {variant ? (
-                      <VariantCard variant={variant} />
+                      <VariantCard variant={variant} onSave={onSave} />
                     ) : (
                       <div
                         className="text-[11px] font-mono italic p-3"

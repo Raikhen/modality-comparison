@@ -10,7 +10,19 @@ import { MessageBubble } from "./MessageBubble";
  * 2. Conversation history messages
  * 3. Final user prompt
  */
-export function MessageThread({ variant }: { variant: Variant }) {
+export function MessageThread({
+  variant,
+  editing = false,
+  onSystemPromptChange,
+  onHistoryChange,
+  onPromptChange,
+}: {
+  variant: Variant;
+  editing?: boolean;
+  onSystemPromptChange?: (content: string) => void;
+  onHistoryChange?: (index: number, content: string) => void;
+  onPromptChange?: (content: string) => void;
+}) {
   // Build system prompt with embedded files (mirrors _build_system_prompt_with_files)
   let systemContent = variant.system_prompt ?? null;
   if (systemContent && variant.files && Object.keys(variant.files).length > 0) {
@@ -21,28 +33,41 @@ export function MessageThread({ variant }: { variant: Variant }) {
     systemContent += fileSection;
   }
 
-  const messages: { role: string; content: string; isLastUser?: boolean }[] = [];
-
-  if (systemContent) {
-    messages.push({ role: "system", content: systemContent });
-  }
-
-  for (const msg of variant.conversation_history ?? []) {
-    messages.push({ role: msg.role, content: msg.content });
-  }
-
-  messages.push({ role: "user", content: variant.prompt, isLastUser: true });
+  const history = variant.conversation_history ?? [];
 
   return (
     <div className="space-y-2">
-      {messages.map((msg, i) => (
+      {systemContent && (
+        <MessageBubble
+          role="system"
+          content={systemContent}
+          onContentChange={
+            editing && onSystemPromptChange ? onSystemPromptChange : undefined
+          }
+        />
+      )}
+
+      {history.map((msg, i) => (
         <MessageBubble
           key={i}
           role={msg.role}
           content={msg.content}
-          isLastUser={msg.isLastUser}
+          onContentChange={
+            editing && onHistoryChange
+              ? (content) => onHistoryChange(i, content)
+              : undefined
+          }
         />
       ))}
+
+      <MessageBubble
+        role="user"
+        content={variant.prompt}
+        isLastUser
+        onContentChange={
+          editing && onPromptChange ? onPromptChange : undefined
+        }
+      />
     </div>
   );
 }

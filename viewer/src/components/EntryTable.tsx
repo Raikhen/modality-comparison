@@ -41,6 +41,11 @@ export function EntryTable({
   const searchParams = useSearchParams();
   const q = (searchParams.get("q") ?? "").toLowerCase();
   const domain = searchParams.get("domain") ?? "";
+  const benchmarkOnly = searchParams.get("benchmark") === "1";
+
+  const hasBenchmark = entries.some(
+    (e) => e.benchmark_sources && e.benchmark_sources.length > 0
+  );
 
   const [sortKey, setSortKey] = useState<SortKey>("entry_id");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
@@ -60,6 +65,8 @@ export function EntryTable({
 
   const filtered = entries.filter((e) => {
     if (domain && e.risk_domain !== domain) return false;
+    if (benchmarkOnly && !(e.benchmark_sources && e.benchmark_sources.length > 0))
+      return false;
     if (
       q &&
       !e.prompt_preview.toLowerCase().includes(q) &&
@@ -92,7 +99,7 @@ export function EntryTable({
 
   return (
     <div>
-      <FilterBar domains={domains} />
+      <FilterBar domains={domains} hasBenchmark={hasBenchmark} />
       <div
         className="font-mono text-[11px] uppercase tracking-wider mb-2"
         style={{ color: "var(--color-ink-muted)" }}
@@ -175,6 +182,19 @@ export function EntryTable({
                     style={{ color: "var(--color-ink-secondary)" }}
                   >
                     {entry.entry_id}
+                    {entry.benchmark_sources && entry.benchmark_sources.length > 0 && (
+                      <span
+                        className="ml-1.5 font-mono text-[9px] uppercase tracking-wider px-1 py-px rounded-sm align-middle"
+                        style={{
+                          color: "var(--color-amber)",
+                          background: "var(--color-amber-surface)",
+                          border: "1px solid var(--color-amber-rule)",
+                        }}
+                        title={`Benchmark: ${entry.benchmark_sources.join(", ")}`}
+                      >
+                        BM
+                      </span>
+                    )}
                   </td>
                   <td className="px-3 py-2">
                     <DomainBadge domain={entry.risk_domain} />
