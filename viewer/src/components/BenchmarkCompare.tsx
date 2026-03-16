@@ -1,12 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { EntryVariants, Modality, Tone, Variant, Source } from "@/lib/types";
+import type { EntryVariants, Modality, Variant, Source } from "@/lib/types";
 import {
   MODALITIES,
   MODALITY_LABELS,
-  TONES,
-  TONE_LABELS,
   SOURCE_LABELS,
 } from "@/lib/types";
 import { MessageThread } from "./MessageThread";
@@ -16,6 +14,10 @@ import { FileContent } from "./FileContent";
 
 const BENCHMARK_SOURCES: Source[] = ["gemini", "deepseek"];
 
+function paraphraseLabel(pid: number): string {
+  return pid === 0 ? "Original" : `Paraphrase ${pid}`;
+}
+
 export function BenchmarkCompare({ entryId }: { entryId: number }) {
   const [data, setData] = useState<Record<Source, EntryVariants | null>>({
     production: null,
@@ -23,7 +25,7 @@ export function BenchmarkCompare({ entryId }: { entryId: number }) {
     deepseek: null,
   });
   const [loading, setLoading] = useState(true);
-  const [selectedTone, setSelectedTone] = useState<Tone>("verbatim");
+  const [selectedPid, setSelectedPid] = useState<number>(0);
   const [selectedModality, setSelectedModality] = useState<Modality>("agentic");
 
   useEffect(() => {
@@ -80,44 +82,50 @@ export function BenchmarkCompare({ entryId }: { entryId: number }) {
     );
   }
 
+  // Collect paraphrase IDs from both sources
+  const allPids = new Set<number>();
+  for (const v of gemini.variants) allPids.add(v.paraphrase_id);
+  for (const v of deepseek.variants) allPids.add(v.paraphrase_id);
+  const sortedPids = [...allPids].sort((a, b) => a - b);
+
   const geminiLookup = new Map<string, Variant>();
-  for (const v of gemini.variants) geminiLookup.set(`${v.tone}_${v.modality}`, v);
+  for (const v of gemini.variants) geminiLookup.set(`${v.paraphrase_id}_${v.modality}`, v);
 
   const deepseekLookup = new Map<string, Variant>();
-  for (const v of deepseek.variants) deepseekLookup.set(`${v.tone}_${v.modality}`, v);
+  for (const v of deepseek.variants) deepseekLookup.set(`${v.paraphrase_id}_${v.modality}`, v);
 
-  const geminiVariant = geminiLookup.get(`${selectedTone}_${selectedModality}`);
-  const deepseekVariant = deepseekLookup.get(`${selectedTone}_${selectedModality}`);
+  const geminiVariant = geminiLookup.get(`${selectedPid}_${selectedModality}`);
+  const deepseekVariant = deepseekLookup.get(`${selectedPid}_${selectedModality}`);
 
   return (
     <div>
-      {/* Tone selector */}
+      {/* Paraphrase selector */}
       <div className="flex items-center gap-2 mb-3">
         <span
           className="font-mono text-[11px] uppercase tracking-widest"
           style={{ color: "var(--color-ink-muted)" }}
         >
-          Tone
+          Paraphrase
         </span>
-        {TONES.map((t) => (
+        {sortedPids.map((pid) => (
           <button
-            key={t}
-            onClick={() => setSelectedTone(t)}
+            key={pid}
+            onClick={() => setSelectedPid(pid)}
             className="px-3 py-1 font-mono text-[11px] rounded-sm transition-colors duration-75"
             style={{
               background:
-                selectedTone === t ? "var(--color-ink)" : "var(--color-surface)",
+                selectedPid === pid ? "var(--color-ink)" : "var(--color-surface)",
               color:
-                selectedTone === t
+                selectedPid === pid
                   ? "var(--color-surface)"
                   : "var(--color-ink-secondary)",
               border:
-                selectedTone === t
+                selectedPid === pid
                   ? "1px solid var(--color-ink)"
                   : "1px solid var(--color-rule-emphasis)",
             }}
           >
-            {TONE_LABELS[t]}
+            {paraphraseLabel(pid)}
           </button>
         ))}
       </div>

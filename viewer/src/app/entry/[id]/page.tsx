@@ -2,7 +2,8 @@
 
 import { use, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import type { EntryVariants, Tone, Modality, VariantPatch, Source } from "@/lib/types";
+import { useSearchParams } from "next/navigation";
+import type { EntryVariants, Modality, VariantPatch, Source } from "@/lib/types";
 import { SOURCE_LABELS } from "@/lib/types";
 import { DomainBadge } from "@/components/DomainBadge";
 import { VariantGrid } from "@/components/VariantGrid";
@@ -17,6 +18,8 @@ export default function EntryPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
+  const searchParams = useSearchParams();
+  const backHref = `/${searchParams.toString() ? `?${searchParams.toString()}` : ""}`;
   const [entry, setEntry] = useState<EntryVariants | null | undefined>(
     undefined
   );
@@ -59,11 +62,11 @@ export default function EntryPage({
   }, [id, source]);
 
   const saveVariant = useCallback(
-    async (tone: Tone, modality: Modality, patch: VariantPatch) => {
+    async (paraphraseId: number, modality: Modality, patch: VariantPatch) => {
       const res = await fetch(`/api/entry/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tone, modality, patch }),
+        body: JSON.stringify({ paraphrase_id: paraphraseId, modality, patch }),
       });
       if (!res.ok) {
         const err = await res.json();
@@ -107,7 +110,7 @@ export default function EntryPage({
           Entry {id} not found.
         </p>
         <Link
-          href="/"
+          href={backHref}
           className="font-mono text-xs"
           style={{ color: "var(--color-amber)" }}
         >
@@ -121,7 +124,7 @@ export default function EntryPage({
     <div>
       <div className="mb-5">
         <Link
-          href="/"
+          href={backHref}
           className="font-mono text-[11px] mb-3 inline-block transition-colors duration-75 hover-ink"
           style={{ color: "var(--color-ink-muted)" }}
         >

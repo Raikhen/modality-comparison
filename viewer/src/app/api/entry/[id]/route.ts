@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getEntry, getEntryFromSource, getDefaultSource, getBenchmarkSources, getAvailableSources, updateVariant } from "@/lib/variants";
-import { TONES, MODALITIES } from "@/lib/types";
-import type { Tone, Modality, VariantPatch, Source } from "@/lib/types";
+import { MODALITIES } from "@/lib/types";
+import type { Modality, VariantPatch, Source } from "@/lib/types";
 
 const VALID_SOURCES = new Set<Source>(["production", "gemini", "deepseek"]);
 
@@ -49,17 +49,17 @@ export async function PATCH(
     return NextResponse.json({ error: "Invalid ID" }, { status: 400 });
   }
 
-  let body: { tone: string; modality: string; patch: VariantPatch };
+  let body: { paraphrase_id: number; modality: string; patch: VariantPatch };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { tone, modality, patch } = body;
+  const { paraphrase_id, modality, patch } = body;
 
-  if (!TONES.includes(tone as Tone)) {
-    return NextResponse.json({ error: `Invalid tone: ${tone}` }, { status: 400 });
+  if (typeof paraphrase_id !== "number" || paraphrase_id < 0 || !Number.isInteger(paraphrase_id)) {
+    return NextResponse.json({ error: `Invalid paraphrase_id: ${paraphrase_id}` }, { status: 400 });
   }
   if (!MODALITIES.includes(modality as Modality)) {
     return NextResponse.json({ error: `Invalid modality: ${modality}` }, { status: 400 });
@@ -69,7 +69,7 @@ export async function PATCH(
   }
 
   try {
-    const updated = updateVariant(entryId, tone as Tone, modality as Modality, patch);
+    const updated = updateVariant(entryId, paraphrase_id, modality as Modality, patch);
     return NextResponse.json(updated);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Update failed";

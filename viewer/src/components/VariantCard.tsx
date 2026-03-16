@@ -3,11 +3,15 @@
 import { useId, useState, useCallback } from "react";
 import type { Variant, SaveVariantFn, VariantPatch } from "@/lib/types";
 import type { ToolDefinition as ToolDef } from "@/lib/types";
-import { MODALITY_LABELS, TONE_LABELS } from "@/lib/types";
+import { MODALITY_LABELS } from "@/lib/types";
 import { MessageThread } from "./MessageThread";
 import { CollapsibleSection } from "./CollapsibleSection";
 import { ToolDefinition } from "./ToolDefinition";
 import { FileContent } from "./FileContent";
+
+function paraphraseLabel(pid: number): string {
+  return pid === 0 ? "Original" : `Paraphrase ${pid}`;
+}
 
 export function VariantCard({
   variant,
@@ -43,13 +47,13 @@ export function VariantCard({
     if (!onSave) return;
     setSaving(true);
     try {
-      await onSave(variant.tone, variant.modality, draft);
+      await onSave(variant.paraphrase_id, variant.modality, draft);
       setEditing(false);
       setDraft({});
     } finally {
       setSaving(false);
     }
-  }, [onSave, variant.tone, variant.modality, draft]);
+  }, [onSave, variant.paraphrase_id, variant.modality, draft]);
 
   // Build a working variant that reflects draft edits for MessageThread
   const workingVariant: Variant = {
@@ -95,7 +99,7 @@ export function VariantCard({
         }}
         aria-expanded={expanded}
         aria-controls={contentId}
-        aria-label={`${TONE_LABELS[variant.tone]} ${MODALITY_LABELS[variant.modality]} variant`}
+        aria-label={`${paraphraseLabel(variant.paraphrase_id)} ${MODALITY_LABELS[variant.modality]} variant`}
         className="w-full px-3 py-2 text-left transition-colors duration-75 cursor-pointer hover-raised"
         style={{
           background: expanded ? "var(--color-surface-raised)" : "transparent",

@@ -1,4 +1,3 @@
-export type Tone = "verbatim" | "formal" | "casual";
 export type Modality =
   | "plain_text"
   | "plain_text_with_history"
@@ -13,7 +12,6 @@ export const SOURCE_LABELS: Record<Source, string> = {
   deepseek: "DeepSeek",
 };
 
-export const TONES: Tone[] = ["verbatim", "formal", "casual"];
 export const MODALITIES: Modality[] = [
   "plain_text",
   "plain_text_with_history",
@@ -28,12 +26,6 @@ export const MODALITY_LABELS: Record<Modality, string> = {
   agentic: "Agentic (full)",
 };
 
-export const TONE_LABELS: Record<Tone, string> = {
-  verbatim: "Verbatim",
-  formal: "Formal",
-  casual: "Casual",
-};
-
 export interface ToolDefinition {
   name: string;
   description?: string;
@@ -45,7 +37,7 @@ export interface ToolDefinition {
 }
 
 export interface Variant {
-  tone: Tone;
+  paraphrase_id: number;
   modality: Modality;
   prompt: string;
   system_prompt?: string | null;
@@ -59,6 +51,7 @@ export interface EntryVariants {
   entry_id: number;
   original_prompt: string;
   risk_domain: string;
+  num_paraphrases?: number;
   variants: Variant[];
 }
 
@@ -74,7 +67,7 @@ export type VariantPatch = Partial<
 >;
 
 export type SaveVariantFn = (
-  tone: Tone,
+  paraphraseId: number,
   modality: Modality,
   patch: VariantPatch
 ) => Promise<void>;

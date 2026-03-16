@@ -2,7 +2,11 @@
 
 import { useState, useCallback } from "react";
 import type { Variant, Modality, SaveVariantFn, VariantPatch } from "@/lib/types";
-import { MODALITIES, MODALITY_LABELS, TONES, TONE_LABELS } from "@/lib/types";
+import { MODALITIES, MODALITY_LABELS } from "@/lib/types";
+
+function paraphraseLabel(pid: number): string {
+  return pid === 0 ? "Original" : `Paraphrase ${pid}`;
+}
 
 export function CompareView({
   variants,
@@ -13,12 +17,25 @@ export function CompareView({
 }) {
   const [modality, setModality] = useState<Modality>("plain_text");
 
-  const byTone = new Map<string, Variant>();
+  const paraphraseIds = new Set<number>();
+  const byPid = new Map<number, Variant>();
   for (const v of variants) {
+    paraphraseIds.add(v.paraphrase_id);
     if (v.modality === modality) {
-      byTone.set(v.tone, v);
+      byPid.set(v.paraphrase_id, v);
     }
   }
+  const sortedPids = [...paraphraseIds].sort((a, b) => a - b);
+
+  // Responsive grid: up to 5 columns
+  const colClass =
+    sortedPids.length <= 2
+      ? "grid-cols-1 md:grid-cols-2"
+      : sortedPids.length <= 3
+        ? "grid-cols-1 md:grid-cols-3"
+        : sortedPids.length <= 4
+          ? "grid-cols-1 md:grid-cols-2 lg:grid-cols-4"
+          : "grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5";
 
   return (
     <div>
@@ -52,21 +69,21 @@ export function CompareView({
         ))}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        {TONES.map((tone) => {
-          const variant = byTone.get(tone);
+      <div className={`grid ${colClass} gap-3`}>
+        {sortedPids.map((pid) => {
+          const variant = byPid.get(pid);
           if (!variant) return null;
 
           return (
             <CompareCard
-              key={tone}
+              key={pid}
               variant={variant}
               onSave={onSave}
             />
           );
         })}
       </div>
-      {byTone.size === 0 && (
+      {byPid.size === 0 && (
         <div
           className="py-8 text-center font-mono text-xs"
           style={{ color: "var(--color-ink-muted)" }}
@@ -102,12 +119,12 @@ function CompareCard({
     if (!onSave) return;
     setSaving(true);
     try {
-      await onSave(variant.tone, variant.modality, { prompt: draftPrompt });
+      await onSave(variant.paraphrase_id, variant.modality, { prompt: draftPrompt });
       setEditing(false);
     } finally {
       setSaving(false);
     }
-  }, [onSave, variant.tone, variant.modality, draftPrompt]);
+  }, [onSave, variant.paraphrase_id, variant.modality, draftPrompt]);
 
   return (
     <div
@@ -133,7 +150,7 @@ function CompareCard({
           className="font-mono text-[11px] uppercase tracking-widest"
           style={{ color: "var(--color-ink-tertiary)" }}
         >
-          {TONE_LABELS[variant.tone]}
+          {paraphraseLabel(variant.paraphrase_id)}
         </h3>
         {onSave && !editing && (
           <span

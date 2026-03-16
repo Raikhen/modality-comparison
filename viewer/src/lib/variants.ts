@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
-import type { EntryVariants, EntrySummary, Tone, Modality, VariantPatch, Source } from "./types";
+import type { EntryVariants, EntrySummary, Modality, VariantPatch, Source, Variant } from "./types";
 
 const VARIANTS_DIR = path.resolve(process.cwd(), "..", "data", "variants");
 
@@ -10,6 +10,38 @@ const SOURCE_DIRS: Record<Source, string> = {
   gemini: path.join(VARIANTS_DIR, "gemini"),
   deepseek: path.join(VARIANTS_DIR, "deepseek"),
 };
+
+/** Map old tone-based variants to paraphrase_id for backward compatibility. */
+const TONE_TO_PARAPHRASE: Record<string, number> = {
+  verbatim: 0,
+  formal: 1,
+  casual: 2,
+};
+
+function normalizeVariants(data: EntryVariants): EntryVariants {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const raw = data.variants as any[];
+  const needsNormalization = raw.some(
+    (v) => "tone" in v && !("paraphrase_id" in v)
+  );
+  if (!needsNormalization) return data;
+
+  const normalized: Variant[] = raw.map((v) => {
+    if ("tone" in v && !("paraphrase_id" in v)) {
+      const tone = v.tone as string;
+      const { tone: _, ...rest } = v;
+      return { ...rest, paraphrase_id: TONE_TO_PARAPHRASE[tone] ?? 0 } as Variant;
+    }
+    return v as Variant;
+  });
+
+  const maxPid = Math.max(...normalized.map((v) => v.paraphrase_id));
+  return {
+    ...data,
+    num_paraphrases: data.num_paraphrases ?? maxPid + 1,
+    variants: normalized,
+  };
+}
 
 export function getAllEntries(): EntrySummary[] {
   // Collect unique JSON filenames across all source directories
@@ -82,7 +114,8 @@ export function getEntryFromSource(id: number, source: Source): EntryVariants | 
 
   try {
     const raw = fs.readFileSync(filePath, "utf-8");
-    return JSON.parse(raw) as EntryVariants;
+    const data = JSON.parse(raw) as EntryVariants;
+    return normalizeVariants(data);
   } catch {
     return null;
   }
@@ -108,7 +141,7 @@ export function getAvailableSources(id: number): Source[] {
 
 export function updateVariant(
   entryId: number,
-  tone: Tone,
+  paraphraseId: number,
   modality: Modality,
   patch: VariantPatch
 ): EntryVariants {
@@ -121,10 +154,10 @@ export function updateVariant(
   const data = JSON.parse(raw) as EntryVariants;
 
   const variant = data.variants.find(
-    (v) => v.tone === tone && v.modality === modality
+    (v) => v.paraphrase_id === paraphraseId && v.modality === modality
   );
   if (!variant) {
-    throw new Error(`Variant ${tone}/${modality} not found in entry ${entryId}`);
+    throw new Error(`Variant p${paraphraseId}/${modality} not found in entry ${entryId}`);
   }
 
   Object.assign(variant, patch);

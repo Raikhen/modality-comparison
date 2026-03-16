@@ -1,8 +1,12 @@
 "use client";
 
 import type { Variant, SaveVariantFn } from "@/lib/types";
-import { TONES, MODALITIES, MODALITY_LABELS, TONE_LABELS } from "@/lib/types";
+import { MODALITIES, MODALITY_LABELS } from "@/lib/types";
 import { VariantCard } from "./VariantCard";
+
+function paraphraseLabel(pid: number): string {
+  return pid === 0 ? "Original" : `Paraphrase ${pid}`;
+}
 
 export function VariantGrid({
   variants,
@@ -12,9 +16,12 @@ export function VariantGrid({
   onSave?: SaveVariantFn;
 }) {
   const lookup = new Map<string, Variant>();
+  const paraphraseIds = new Set<number>();
   for (const v of variants) {
-    lookup.set(`${v.tone}_${v.modality}`, v);
+    lookup.set(`${v.paraphrase_id}_${v.modality}`, v);
+    paraphraseIds.add(v.paraphrase_id);
   }
+  const sortedPids = [...paraphraseIds].sort((a, b) => a - b);
 
   return (
     <div className="overflow-x-auto">
@@ -23,9 +30,9 @@ export function VariantGrid({
           <tr>
             <th
               className="p-2 text-left font-mono text-[11px] uppercase tracking-widest"
-              style={{ color: "var(--color-ink-muted)", width: "80px" }}
+              style={{ color: "var(--color-ink-muted)", width: "100px" }}
             >
-              <span className="sr-only">Tone</span>
+              <span className="sr-only">Paraphrase</span>
             </th>
             {MODALITIES.map((m) => (
               <th
@@ -39,19 +46,19 @@ export function VariantGrid({
           </tr>
         </thead>
         <tbody>
-          {TONES.map((t) => (
+          {sortedPids.map((pid) => (
             <tr
-              key={t}
+              key={pid}
               style={{ borderTop: "1px solid var(--color-rule)" }}
             >
               <td
                 className="p-2 font-mono text-[11px] uppercase tracking-widest align-top whitespace-nowrap"
                 style={{ color: "var(--color-ink-tertiary)" }}
               >
-                {TONE_LABELS[t]}
+                {paraphraseLabel(pid)}
               </td>
               {MODALITIES.map((m) => {
-                const variant = lookup.get(`${t}_${m}`);
+                const variant = lookup.get(`${pid}_${m}`);
                 return (
                   <td key={m} className="p-2 align-top">
                     {variant ? (
