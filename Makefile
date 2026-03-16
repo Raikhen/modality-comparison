@@ -1,12 +1,8 @@
-.PHONY: tasks variants validate eval analyze clean-sandboxes
+.PHONY: variants validate summary missing eval analyze
 
-# Generate task files from dataset
-tasks:
-	python3 scripts/generate_ralphy_tasks.py
-
-# Run ralphy to build variant JSON files
+# Generate variant files via API
 variants:
-	ralphy --yaml tasks.yaml --parallel --max-parallel 10 --max-retries 5 --sandbox --model claude-sonnet-4-20250514
+	python3 scripts/generate_variants.py
 
 # Validate variant files
 validate:
@@ -27,14 +23,3 @@ eval:
 # Analyze results
 analyze:
 	python3 -m src.analyze
-
-# Clean up ralphy sandboxes
-clean-sandboxes:
-	rm -rf .ralphy-sandboxes/
-
-# Recover variant files from preserved sandboxes
-recover:
-	@for dir in .ralphy-sandboxes/*/variants/; do \
-		if [ -d "$$dir" ]; then cp -n "$$dir"*.json variants/ 2>/dev/null || true; fi; \
-	done
-	@echo "Variants: $$(ls variants/ | wc -l | tr -d ' ') files"

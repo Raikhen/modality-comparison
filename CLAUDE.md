@@ -10,17 +10,28 @@ presented in different ways (plain text vs. agentic context) and tones
 ## Architecture
 
 ```
-dataset.csv → scripts/generate_ralphy_tasks.py → tasks/entry_<ID>.md
-                                                       │
-                                                  ralphy --prd tasks/
-                                                       │
-                                                 variants/<ID>.json
-                                                       ↓
-                                           src/eval_task.py  (Inspect AI)
-                                                       ↓
-                                                 logs/*.eval
-                                                       ↓
-                                           src/analyze.py → figures/*.png
+data/dataset.csv → scripts/generate_variants.py → data/variants/claude/<ID>.json
+                                                          ↓
+                                                src/eval_task.py  (Inspect AI)
+                                                          ↓
+                                                    logs/*.eval
+                                                          ↓
+                                              src/analyze.py → figures/*.png
+```
+
+### Directory layout
+
+```
+data/                   All experiment data
+  dataset.csv           Source dataset
+  variants/             Generated variant data, by model
+    claude/             Primary variants (used for evaluation)
+    deepseek/           Benchmark variants from DeepSeek
+    gemini/             Benchmark variants from Gemini
+    backup/             Snapshot backup of claude variants
+src/                    Core Python library (eval, analysis, validation)
+scripts/                Operational scripts (variant generation, repair)
+viewer/                 Next.js variant inspection UI
 ```
 
 ### Key modules
@@ -29,18 +40,17 @@ dataset.csv → scripts/generate_ralphy_tasks.py → tasks/entry_<ID>.md
 |---|---|
 | `src/config.py` | Central path definitions — all other modules import from here |
 | `src/schemas.py` | Pydantic models & Literal type aliases for tones/modalities |
-| `src/dataset.py` | Loads `dataset.csv` into `Entry` dataclasses |
+| `src/dataset.py` | Loads `data/dataset.csv` into `Entry` dataclasses |
 | `src/eval_task.py` | Inspect AI `@task` — multi-turn eval with mock tool execution |
 | `src/analyze.py` | Post-hoc analysis of `.eval` logs (stats + figures) |
 | `src/validate.py` | CLI tool for checking variant file integrity |
-| `scripts/generate_ralphy_tasks.py` | Generates per-entry Ralphy task files |
+| `scripts/generate_variants.py` | Generates variant JSON files via API |
 
 ## Running Commands
 
 ```bash
-# Build variants: generate task files then run Ralphy
-python3 scripts/generate_ralphy_tasks.py
-ralphy --prd tasks/ --parallel --max-parallel 10 --max-retries 5
+# Generate variant files
+python3 scripts/generate_variants.py
 
 # Validate built variants
 python3 -m src.validate validate
@@ -141,8 +151,11 @@ and should not materially affect guardrail behavior.
 - **All source lives in `src/`**. No standalone scripts in the project root.
   Run modules as `python3 -m src.<module>` from the project root.
 - **Single source of truth for paths**: all path constants live in `src/config.py`.
-  Never define `PROJECT_ROOT` or `DATASET_PATH` in other modules.
-- **No `sys.path` manipulation**. The `-m` invocation handles imports correctly.
+  Scripts in `scripts/` import from `src.config` (via `sys.path.insert` before
+  the import). Never redefine `DATASET_PATH` or `VARIANTS_DIR` locally.
+- **No `sys.path` manipulation** in `src/` modules. The `-m` invocation handles
+  imports correctly. Scripts in `scripts/` may use `sys.path.insert` only to
+  bootstrap `src` imports.
 - **Use Literal types** for fixed string enums (`Tone`, `Modality` in
   `src/schemas.py`). Export canonical lists (`TONES`, `MODALITIES`) for
   iteration.
@@ -154,23 +167,23 @@ and should not materially affect guardrail behavior.
 
 ### Evaluation Workflow
 
-1. **Build** variants: `python3 scripts/generate_ralphy_tasks.py` then `ralphy --prd tasks/ --parallel --max-parallel 10 --max-retries 5`
+1. **Build** variants: `python3 scripts/generate_variants.py`
 2. **Validate** completeness: `python3 -m src.validate summary`
 3. **Run** eval: `inspect eval src/eval_task.py --model <model> --model-role grader=<model>`
 4. **Analyze** results: `python3 -m src.analyze`
 
 ### Adding a New Risk Domain
 
-1. Add entries to `dataset.csv`
-2. Re-run `python3 scripts/generate_ralphy_tasks.py` (generates tasks only for missing entries)
-3. Run Ralphy to generate variants for the new entries
+1. Add entries to `data/dataset.csv`
+2. Re-run `python3 scripts/generate_variants.py` (generates variants only for missing entries)
 
 ### Files to Never Commit
 
 - `.env` — API keys
-- `variants/` — large generated data
+- `data/variants/` — generated variant data (all subdirs)
 - `logs/` — evaluation logs
 - `figures/` — generated plots
+- `.generate_checkpoints/` — generation state
 - `__pycache__/` — bytecode
 
 ## Design Context

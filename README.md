@@ -16,7 +16,7 @@ dimensions:
 
 - **Modality** — `plain_text`, `plain_text_with_history`, `agentic`,
   `agentic_no_history`
-- **Tone** — `verbatim`, `rephrase_1` (formal), `rephrase_2` (casual)
+- **Tone** — `verbatim`, `formal`, `casual`
 
 Variants are evaluated with [Inspect AI](https://inspect.ai). A grader model
 scores each response on a 0–7 compliance rubric, and the analysis module
@@ -36,8 +36,9 @@ model providers you plan to use.
 
 ### 1. Generate variants
 
-Use Claude Code with `PROMPT.md` to generate variant JSON files from
-`dataset.csv` into `variants/`.
+```bash
+python3 scripts/generate_variants.py
+```
 
 ### 2. Validate
 
@@ -50,14 +51,13 @@ python3 -m src.validate validate  # schema check all variant files
 ### 3. Run evaluation
 
 ```bash
-inspect eval src/eval_task.py --model openai/gpt-4o
-
-# Limit sample count for quick iteration
-inspect eval src/eval_task.py --model openai/gpt-4o -T max_samples=100
-
-# Override the grader model
 inspect eval src/eval_task.py --model openai/gpt-4o \
     --model-role grader=anthropic/claude-sonnet-4-20250514
+
+# Limit sample count for quick iteration
+inspect eval src/eval_task.py --model openai/gpt-4o \
+    --model-role grader=anthropic/claude-sonnet-4-20250514 \
+    -T max_samples=100
 ```
 
 ### 4. Analyze results
@@ -72,16 +72,23 @@ Outputs statistical summaries to stdout and saves figures to `figures/`.
 ## Project Structure
 
 ```
-src/
+data/                   Input data
+  dataset.csv           Source entries with adversarial prompts & rubrics
+src/                    Core Python library
   config.py             Path constants
   schemas.py            Pydantic models & type aliases
   dataset.py            Dataset loader
   eval_task.py          Inspect AI evaluation task
   analyze.py            Post-hoc analysis & plotting
   validate.py           Variant file validation CLI
-dataset.csv             Source entries with adversarial prompts & rubrics
-scripts/
-  generate_ralphy_tasks.py  Generates per-entry Ralphy task files
+scripts/                Operational scripts
+  generate_variants.py  Generate variant JSON files via API
+  repair_variants.py    Fix common variant file issues
+viewer/                 Next.js variant inspection UI
+variants/               Generated variant data (by model)
+  claude/               Primary variants used for evaluation
+  deepseek/             Benchmark variants from DeepSeek
+  gemini/               Benchmark variants from Gemini
 ```
 
 ## Requirements
