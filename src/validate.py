@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 
 from src.config import DATASET_PATH, VARIANTS_DIR
-from src.schemas import MODALITIES, TONES, EntryVariants
+from src.schemas import MODALITIES, EntryVariants
 
 
 def all_entry_ids() -> list[int]:
@@ -45,26 +45,31 @@ def validate():
 
     ok = 0
     errors = 0
-    expected_pairs = {(t, m) for t in TONES for m in MODALITIES}
 
     for path in files:
         try:
             data = json.loads(path.read_text())
             entry = EntryVariants(**data)
             n = len(entry.variants)
+            num_p = entry.num_paraphrases
 
-            tone_modality_pairs = {(v.tone, v.modality) for v in entry.variants}
-            missing = expected_pairs - tone_modality_pairs
+            expected_pairs = {
+                (pid, m) for pid in range(num_p) for m in MODALITIES
+            }
+            actual_pairs = {(v.paraphrase_id, v.modality) for v in entry.variants}
+            missing = expected_pairs - actual_pairs
 
             if missing:
-                missing_str = ", ".join(f"{t}/{m}" for t, m in sorted(missing))
+                missing_str = ", ".join(
+                    f"p{pid}/{m}" for pid, m in sorted(missing)
+                )
                 print(
                     f"  {path.name}: {n}/{len(expected_pairs)} variants, "
                     f"missing: {missing_str}"
                 )
                 errors += 1
             else:
-                print(f"  {path.name}: {n} variants OK")
+                print(f"  {path.name}: {n} variants OK ({num_p} paraphrases)")
                 ok += 1
         except Exception as e:
             print(f"  {path.name}: INVALID -- {e}")

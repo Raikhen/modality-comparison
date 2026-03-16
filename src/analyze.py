@@ -2,10 +2,12 @@
 """
 Analyze evaluation results from Inspect logs.
 
-Reads an Inspect .eval log (ZIP archive) and produces factorial analysis
-of compliance scores across modality and tone dimensions using ordinal
-statistics (median, IQR, Mann-Whitney U, Kruskal-Wallis) with Bonferroni
-correction for multiple comparisons.
+Reads an Inspect .eval log (ZIP archive) and produces analysis of compliance
+scores across modalities using ordinal statistics (median, IQR, Mann-Whitney U,
+Kruskal-Wallis) with Bonferroni correction for multiple comparisons.
+
+Paraphrases are treated as replicates — scores are aggregated across paraphrases
+to make the modality comparison more robust.
 
 Usage:
     python3 -m src.analyze                                      # analyze latest log
@@ -23,7 +25,7 @@ import pandas as pd
 from scipy import stats
 
 from src.config import FIGURES_DIR, LOGS_DIR
-from src.schemas import MODALITIES, TONES
+from src.schemas import MODALITIES
 
 PALETTE = {
     "plain_text": "#4C72B0",
@@ -57,7 +59,7 @@ def load_eval_log(log_path: Path) -> tuple[list[dict], list[dict]]:
 
             row = {
                 "entry_id": metadata.get("entry_id"),
-                "tone": metadata.get("tone"),
+                "paraphrase_id": metadata.get("paraphrase_id"),
                 "modality": metadata.get("modality"),
                 "risk_domain": metadata.get("risk_domain"),
                 "sample_id": sample.get("id", ""),
@@ -132,21 +134,13 @@ def report_error_rates(errors: pd.DataFrame, scored: pd.DataFrame) -> None:
         if m_total > 0:
             print(f"    {m}: {m_err}/{m_total} ({100 * m_err / m_total:.1f}%)")
 
-    print("\n  Failure rate by tone:")
-    for t in TONES:
-        t_err = len(errors[errors["tone"] == t]) if not errors.empty else 0
-        t_ok = len(scored[scored["tone"] == t]) if not scored.empty else 0
-        t_total = t_err + t_ok
-        if t_total > 0:
-            print(f"    {t}: {t_err}/{t_total} ({100 * t_err / t_total:.1f}%)")
-
 
 def analyze(df: pd.DataFrame) -> None:
-    """Run full factorial analysis with ordinal statistics."""
+    """Run analysis with ordinal statistics."""
     present = [m for m in MODALITIES if len(df[df["modality"] == m]) > 0]
 
     print("\n" + "=" * 70)
-    print("MODALITY × TONE FACTORIAL ANALYSIS (ORDINAL STATISTICS)")
+    print("MODALITY ANALYSIS (ORDINAL STATISTICS)")
     print("=" * 70)
 
     # --- 1. Main effect of modality ---
@@ -182,39 +176,32 @@ def analyze(df: pd.DataFrame) -> None:
                 f"Cliff's δ={delta:+.3f}"
             )
 
-    # --- 2. Main effect of tone ---
-    print("\n2. MAIN EFFECT OF TONE")
+    # --- 2. Paraphrase variance ---
+    print("\n2. WITHIN-ENTRY PARAPHRASE VARIANCE")
     print("-" * 40)
-    present_tones = [t for t in TONES if len(df[df["tone"] == t]) > 0]
-    for t in present_tones:
-        s = df[df["tone"] == t]["compliance_score"]
-        print(
-            f"  {t:15s}  n={len(s):4d}  "
-            f"median={s.median():.1f}  "
-            f"IQR=[{s.quantile(0.25):.1f}, {s.quantile(0.75):.1f}]  "
-            f"mean={s.mean():.2f}"
-        )
+    if "paraphrase_id" in df.columns:
+        n_paraphrases = df["paraphrase_id"].nunique()
+        print(f"  Paraphrases per entry: {n_paraphrases}")
 
-    tone_groups = [
-        df[df["tone"] == t]["compliance_score"].values for t in present_tones
-    ]
-    if len(tone_groups) > 1:
-        h_stat, p_val = stats.kruskal(*tone_groups)
-        print(f"\n  Kruskal-Wallis H={h_stat:.2f}, p={p_val:.4f}")
+        # Per entry per modality: std dev across paraphrases
+        grouped = df.groupby(["entry_id", "modality"])["compliance_score"]
+        variance_stats = grouped.std().dropna()
+        if len(variance_stats) > 0:
+            print(f"  Mean within-cell std dev: {variance_stats.mean():.2f}")
+            print(f"  Median within-cell std dev: {variance_stats.median():.2f}")
+            print(f"  Max within-cell std dev: {variance_stats.max():.2f}")
+            print("\n  By modality:")
+            for m in present:
+                m_var = variance_stats.xs(m, level="modality") if m in variance_stats.index.get_level_values("modality") else pd.Series()
+                if len(m_var) > 0:
+                    print(f"    {m:30s}  mean_sd={m_var.mean():.2f}  median_sd={m_var.median():.2f}")
+        else:
+            print("  (insufficient data for variance calculation)")
+    else:
+        print("  (no paraphrase_id in data)")
 
-    # --- 3. Interaction: modality × tone ---
-    print("\n3. INTERACTION: MODALITY × TONE (medians)")
-    print("-" * 40)
-    cross = df.pivot_table(
-        values="compliance_score",
-        index="tone",
-        columns="modality",
-        aggfunc="median",
-    )
-    print(cross.to_string())
-
-    # --- 4. By risk domain ---
-    print("\n4. BY RISK DOMAIN")
+    # --- 3. By risk domain ---
+    print("\n3. BY RISK DOMAIN")
     print("-" * 40)
     domains = sorted(df["risk_domain"].unique())
     for domain in domains:
@@ -229,7 +216,7 @@ def analyze(df: pd.DataFrame) -> None:
                     f"n={len(s)}"
                 )
 
-    # --- 5. Summary ---
+    # --- 4. Summary ---
     print("\n" + "=" * 70)
     print("SUMMARY")
     print("=" * 70)
@@ -253,45 +240,8 @@ def plot(df: pd.DataFrame, output_dir: Path) -> None:
     """Generate figures from scored samples."""
     output_dir.mkdir(exist_ok=True)
     present = [m for m in MODALITIES if len(df[df["modality"] == m]) > 0]
-    present_tones = [t for t in TONES if len(df[df["tone"] == t]) > 0]
-    bar_width = 0.8 / max(len(present), 1)
-    x = np.arange(len(present_tones))
 
-    # --- Figure 1: Modality × Tone interaction (median + IQR) ---
-    fig, ax = plt.subplots(figsize=(10, 5))
-    for i, modality in enumerate(present):
-        subset = df[df["modality"] == modality]
-        medians, yerr_lo, yerr_hi = [], [], []
-        for t in present_tones:
-            s = subset[subset["tone"] == t]["compliance_score"]
-            med = s.median() if len(s) > 0 else 0
-            medians.append(med)
-            yerr_lo.append(med - s.quantile(0.25) if len(s) > 0 else 0)
-            yerr_hi.append(s.quantile(0.75) - med if len(s) > 0 else 0)
-        offset = (i - (len(present) - 1) / 2) * bar_width
-        ax.bar(
-            x + offset,
-            medians,
-            bar_width,
-            yerr=[yerr_lo, yerr_hi],
-            capsize=4,
-            label=modality,
-            color=PALETTE.get(modality, "#999999"),
-            alpha=0.85,
-        )
-    ax.set_xticks(x)
-    ax.set_xticklabels(present_tones)
-    ax.set_ylabel("Median Compliance Score (0–7)")
-    ax.set_xlabel("Tone")
-    ax.set_title("Compliance by Modality × Tone")
-    ax.legend(title="Modality", fontsize=8)
-    ax.set_ylim(bottom=0)
-    fig.tight_layout()
-    fig.savefig(output_dir / "modality_x_tone.png", dpi=150)
-    print(f"  Saved {output_dir / 'modality_x_tone.png'}")
-    plt.close(fig)
-
-    # --- Figure 2: Modality main effect ---
+    # --- Figure 1: Modality main effect ---
     fig, ax = plt.subplots(figsize=(7, 5))
     mstats = []
     for modality in present:
@@ -324,39 +274,39 @@ def plot(df: pd.DataFrame, output_dir: Path) -> None:
     print(f"  Saved {output_dir / 'modality_main_effect.png'}")
     plt.close(fig)
 
-    # --- Figure 3: Refusal rate by modality × tone ---
-    fig, ax = plt.subplots(figsize=(10, 5))
-    for i, modality in enumerate(present):
-        subset = df[df["modality"] == modality]
-        refusal_rates = []
-        for t in present_tones:
-            scores = subset[subset["tone"] == t]["compliance_score"]
-            refusal_rates.append(
-                (scores == 0).mean() * 100 if len(scores) > 0 else 0
+    # --- Figure 2: Modality effect with paraphrase variance (strip plot) ---
+    if "paraphrase_id" in df.columns and df["paraphrase_id"].nunique() > 1:
+        fig, ax = plt.subplots(figsize=(8, 5))
+        for i, modality in enumerate(present):
+            subset = df[df["modality"] == modality]
+            # Per-entry mean scores
+            entry_means = subset.groupby("entry_id")["compliance_score"].mean()
+            jitter = np.random.default_rng(42).uniform(-0.15, 0.15, size=len(entry_means))
+            ax.scatter(
+                np.full(len(entry_means), i) + jitter,
+                entry_means.values,
+                alpha=0.3,
+                s=12,
+                color=PALETTE.get(modality, "#999999"),
             )
-        offset = (i - (len(present) - 1) / 2) * bar_width
-        ax.bar(
-            x + offset,
-            refusal_rates,
-            bar_width,
-            capsize=4,
-            label=modality,
-            color=PALETTE.get(modality, "#999999"),
-            alpha=0.85,
-        )
-    ax.set_xticks(x)
-    ax.set_xticklabels(present_tones)
-    ax.set_ylabel("Refusal Rate (%)")
-    ax.set_xlabel("Tone")
-    ax.set_title("Refusal Rate by Modality × Tone")
-    ax.legend(title="Modality", fontsize=8)
-    ax.set_ylim(bottom=0)
-    fig.tight_layout()
-    fig.savefig(output_dir / "refusal_rate.png", dpi=150)
-    print(f"  Saved {output_dir / 'refusal_rate.png'}")
-    plt.close(fig)
+            # Overlay median + IQR
+            med = entry_means.median()
+            q25 = entry_means.quantile(0.25)
+            q75 = entry_means.quantile(0.75)
+            ax.plot([i - 0.2, i + 0.2], [med, med], color="black", linewidth=2)
+            ax.plot([i, i], [q25, q75], color="black", linewidth=1.5)
 
-    # --- Figure 4: By risk domain ---
+        ax.set_xticks(range(len(present)))
+        ax.set_xticklabels(present, rotation=20, ha="right")
+        ax.set_ylabel("Mean Compliance Score (per entry)")
+        ax.set_title("Modality Effect with Paraphrase Variance")
+        ax.set_ylim(bottom=0)
+        fig.tight_layout()
+        fig.savefig(output_dir / "modality_paraphrase_variance.png", dpi=150)
+        print(f"  Saved {output_dir / 'modality_paraphrase_variance.png'}")
+        plt.close(fig)
+
+    # --- Figure 3: By risk domain ---
     domains = sorted(df["risk_domain"].unique())
     if len(domains) > 1:
         fig, ax = plt.subplots(figsize=(10, 5))

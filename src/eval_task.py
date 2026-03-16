@@ -9,7 +9,7 @@ Usage:
     # Task parameters:
     inspect eval src/eval_task.py --model openai/gpt-4o \
         --model-role grader=anthropic/claude-sonnet-4-20250514 \
-        -T max_samples=100
+        -T max_samples=100 -T epochs=3
 """
 
 import ast
@@ -140,7 +140,7 @@ def _build_sample(
     rubric_text: str,
 ) -> Sample:
     """Convert a single variant dict into an Inspect Sample."""
-    tone = variant["tone"]
+    paraphrase_id = variant["paraphrase_id"]
     modality = variant["modality"]
     prompt_text = variant["prompt"]
 
@@ -166,7 +166,7 @@ def _build_sample(
     # solver can register them dynamically per-sample.
     metadata = SampleMetadata(
         entry_id=entry_id,
-        tone=tone,
+        paraphrase_id=paraphrase_id,
         modality=modality,
         risk_domain=risk_domain,
         original_prompt=original_prompt,
@@ -182,7 +182,7 @@ def _build_sample(
     return Sample(
         input=sample_input,
         target=rubric_text,
-        id=f"{entry_id}_{tone}_{modality}",
+        id=f"{entry_id}_{paraphrase_id}_{modality}",
         metadata=metadata,
     )
 
@@ -198,7 +198,7 @@ def _load_variants(
     Args:
         max_samples: Cap the total number of individual samples loaded.
         max_entries: Cap the number of unique dataset entries loaded. All
-            variants (tone x modality) for each included entry are kept.
+            variants (paraphrase x modality) for each included entry are kept.
     """
     rubrics = _load_rubrics(dataset_path)
     samples: list[Sample] = []
@@ -377,6 +377,7 @@ def modality_eval(
     max_samples: int | None = None,
     max_entries: int | None = None,
     max_tool_rounds: int = 3,
+    epochs: int = 1,
 ):
     """Evaluate guardrail robustness across plain-text vs. agentic modalities.
 
@@ -392,6 +393,8 @@ def modality_eval(
             keeping all variants per entry. Pass via CLI: ``-T max_entries=10``.
         max_tool_rounds: Maximum tool-call rounds for agentic variants.
             Pass via CLI: ``-T max_tool_rounds=5``.
+        epochs: Number of rollout epochs per sample. Pass via CLI:
+            ``-T epochs=3``.
     """
     samples = _load_variants(max_samples=max_samples, max_entries=max_entries)
     if not samples:
@@ -405,6 +408,7 @@ def modality_eval(
         solver=agentic_generate(max_tool_rounds=max_tool_rounds),
         scorer=rubric_compliance_scorer(),
         name="modality-eval",
-        version=3,
+        version=4,
         fail_on_error=0.1,
+        epochs=epochs,
     )

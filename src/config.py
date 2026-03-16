@@ -6,3 +6,5 @@ DATASET_PATH = DATA_DIR / "dataset.csv"
 VARIANTS_DIR = PROJECT_ROOT / "data" / "variants" / "claude"
 LOGS_DIR = PROJECT_ROOT / "logs"
 FIGURES_DIR = PROJECT_ROOT / "figures"
+
+DEFAULT_PARAPHRASES = 5
