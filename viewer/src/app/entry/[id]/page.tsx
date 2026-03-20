@@ -216,7 +216,22 @@ export default function EntryPage({
         )}
       </div>
 
-      {view === "grid" ? (
+      {entry.variants.length === 0 ? (
+        <div
+          className="py-24 text-center rounded-sm"
+          style={{
+            border: "1px solid var(--color-rule)",
+            background: "var(--color-surface)",
+          }}
+        >
+          <p
+            className="font-mono text-xs"
+            style={{ color: "var(--color-ink-muted)" }}
+          >
+            No variants generated yet.
+          </p>
+        </div>
+      ) : view === "grid" ? (
         <VariantGrid
           variants={entry.variants}
           onSave={source === "production" ? saveVariant : undefined}

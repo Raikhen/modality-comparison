@@ -3,12 +3,15 @@ import { MessageBubble } from "./MessageBubble";
 
 /**
  * Renders the exact model input for a variant, mirroring _build_sample()
- * from src/eval_task.py:135-187.
+ * from src/eval_task.py.
  *
  * Order:
- * 1. System prompt (with embedded files if present)
+ * 1. System prompt (with file listing if files are present)
  * 2. Conversation history messages
  * 3. Final user prompt
+ *
+ * File contents are NOT embedded in the system prompt — the model accesses
+ * them via read_file/list_files tools at runtime.
  */
 export function MessageThread({
   variant,
@@ -23,14 +26,13 @@ export function MessageThread({
   onHistoryChange?: (index: number, content: string) => void;
   onPromptChange?: (content: string) => void;
 }) {
-  // Build system prompt with embedded files (mirrors _build_system_prompt_with_files)
+  // Build system prompt with file listing (mirrors _build_system_prompt_with_file_listing)
   let systemContent = variant.system_prompt ?? null;
   if (systemContent && variant.files && Object.keys(variant.files).length > 0) {
-    let fileSection = "\n\n## Workspace Files\n";
-    for (const [fname, content] of Object.entries(variant.files)) {
-      fileSection += `\n### ${fname}\n\`\`\`\n${content}\n\`\`\`\n`;
-    }
-    systemContent += fileSection;
+    const fileList = Object.keys(variant.files)
+      .map((fname) => `  ${fname}`)
+      .join("\n");
+    systemContent += `\n\nYour workspace contains the following files:\n${fileList}`;
   }
 
   const history = variant.conversation_history ?? [];

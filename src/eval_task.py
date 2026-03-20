@@ -26,6 +26,7 @@ from inspect_ai.model import (
     ChatMessageSystem,
     ChatMessageTool,
     ChatMessageUser,
+    ToolCall,
     get_model,
 )
 from inspect_ai.scorer import Score, Target, mean, scorer, stderr
@@ -95,40 +96,56 @@ def _load_rubrics(dataset_path: Path) -> dict[int, list[str]]:
     return rubrics
 
 
-def _build_system_prompt_with_files(
+def _build_system_prompt_with_file_listing(
     system_prompt: str | None, files: dict[str, str] | None
 ) -> str | None:
-    """Embed workspace file contents into the system prompt."""
+    """Append a listing of available workspace files to the system prompt.
+
+    Lists filenames only — actual content is accessed via the read_file tool
+    at runtime, mirroring real agentic systems.
+    """
     if not system_prompt:
         return None
     if not files:
         return system_prompt
-    file_section = "\n\n## Workspace Files\n"
-    for fname, content in files.items():
-        file_section += f"\n### {fname}\n```\n{content}\n```\n"
-    return system_prompt + file_section
+    file_list = "\n".join(f"  {fname}" for fname in files)
+    return (
+        system_prompt
+        + "\n\nYour workspace contains the following files:\n"
+        + file_list
+    )
 
 
 def _make_mock_tool(name: str, description: str, schema: dict, response: str):
     """Create a ToolDef that returns a fixed mock response."""
-
-    async def execute(**kwargs: str) -> str:
-        return response
-
-    execute.__name__ = name
-    execute.__doc__ = description
-
-    # Build parameter descriptions from the JSON schema
     props = schema.get("properties", {})
-    param_descriptions = {
-        k: v.get("description", "") for k, v in props.items()
-    }
+
+    # Build a docstring with Args section so Inspect can extract param descriptions
+    param_lines = []
+    for pname, pinfo in props.items():
+        desc = pinfo.get("description", f"{pname} parameter")
+        param_lines.append(f"        {pname}: {desc}")
+    args_section = ""
+    if param_lines:
+        args_section = "\n\n    Args:\n" + "\n".join(param_lines)
+
+    # Create a function with explicit parameter names matching the schema
+    param_names = list(props.keys())
+    if param_names:
+        sig = ", ".join(f"{p}: str = ''" for p in param_names)
+        func_code = f"async def execute({sig}) -> str:\n    return response"
+    else:
+        func_code = "async def execute() -> str:\n    return response"
+
+    local_ns: dict = {"response": response}
+    exec(func_code, local_ns)  # noqa: S102
+    execute = local_ns["execute"]
+    execute.__name__ = name
+    execute.__doc__ = f"{description}{args_section}"
 
     return ToolDef(
         tool=execute,
         name=name,
-        description=description,
-        parameters=param_descriptions if param_descriptions else None,
     )
 
 
@@ -144,8 +161,9 @@ def _build_sample(
     modality = variant["modality"]
     prompt_text = variant["prompt"]
 
-    # Build the system prompt, embedding files if present
-    system_prompt = _build_system_prompt_with_files(
+    # Build the system prompt with file listing (not content — content is
+    # accessed via the read_file tool at runtime).
+    system_prompt = _build_system_prompt_with_file_listing(
         variant.get("system_prompt"), variant.get("files")
     )
 
@@ -156,14 +174,37 @@ def _build_sample(
         if msg["role"] == "user":
             messages.append(ChatMessageUser(content=msg["content"]))
         elif msg["role"] == "assistant":
-            messages.append(ChatMessageAssistant(content=msg["content"]))
+            tool_calls = None
+            if msg.get("tool_calls"):
+                tool_calls = [
+                    ToolCall(
+                        id=tc.get("id", f"history_{len(messages)}_{i}"),
+                        function=tc.get("name", tc.get("function", "")),
+                        arguments=tc.get("arguments", {}),
+                        type="function",
+                    )
+                    for i, tc in enumerate(msg["tool_calls"])
+                ]
+            messages.append(
+                ChatMessageAssistant(
+                    content=msg.get("content") or "",
+                    tool_calls=tool_calls,
+                )
+            )
+        elif msg["role"] == "tool":
+            messages.append(
+                ChatMessageTool(
+                    content=msg["content"],
+                    tool_call_id=msg.get("tool_call_id", "history_call"),
+                )
+            )
     messages.append(ChatMessageUser(content=prompt_text))
 
     # Always use message list as input (even for plain_text) for consistency
     sample_input = messages
 
-    # Pass tool definitions and mock responses through metadata so the
-    # solver can register them dynamically per-sample.
+    # Pass tool definitions, mock responses, and workspace files through
+    # metadata so the solver can register them dynamically per-sample.
     metadata = SampleMetadata(
         entry_id=entry_id,
         paraphrase_id=paraphrase_id,
@@ -174,10 +215,13 @@ def _build_sample(
 
     tool_defs = variant.get("tools")
     tool_responses = variant.get("tool_responses")
+    files = variant.get("files")
     if tool_defs:
         metadata["_tool_defs"] = tool_defs
     if tool_responses:
         metadata["_tool_responses"] = tool_responses
+    if files:
+        metadata["_files"] = files
 
     return Sample(
         input=sample_input,
@@ -236,38 +280,43 @@ def _load_variants(
     return samples
 
 
-def _check_independent_grader() -> None:
+def _check_independent_grader(grader_role: str = "grader") -> None:
     """Raise if the grader model is the same as the eval model (self-grading)."""
     eval_model = get_model()
-    grader = get_model(role="grader")
+    grader = get_model(role=grader_role)
     if eval_model.name == grader.name:
         raise ValueError(
-            f"Self-grading detected: both eval and grader model are "
+            f"Self-grading detected: both eval and {grader_role} model are "
             f"'{eval_model.name}'. Self-grading introduces bias — the model "
             f"under evaluation must not score its own outputs.\n"
-            f"Fix: add --model-role grader=<different-model> to your "
+            f"Fix: add --model-role {grader_role}=<different-model> to your "
             f"inspect eval command."
         )
 
 
 @solver
 def agentic_generate(max_tool_rounds: int = 3):
-    """Multi-turn solver that handles mock tool calls.
+    """Multi-turn solver that handles tool calls.
 
     For samples without tools (plain_text, plain_text_with_history), this
     behaves identically to generate(). For agentic samples, it:
     1. Registers mock tools from the variant metadata
-    2. Calls generate — if the model invokes a tool, Inspect executes
-       the mock and feeds the result back
-    3. Repeats for up to max_tool_rounds tool-call cycles
+    2. Adds functional file tools (read_file, list_files) when workspace
+       files are present — these return real content, not canned responses
+    3. Calls generate — if the model invokes a tool, Inspect executes
+       it and feeds the result back
+    4. Repeats for up to max_tool_rounds tool-call cycles
     """
 
     async def solve(state: TaskState, generate: Generate) -> TaskState:
         tool_defs = state.metadata.get("_tool_defs")
         tool_responses = state.metadata.get("_tool_responses") or {}
+        files = state.metadata.get("_files") or {}
+
+        tools: list[ToolDef] = []
 
         if tool_defs:
-            state.tools = [
+            tools = [
                 _make_mock_tool(
                     name=td["name"],
                     description=td.get("description", ""),
@@ -278,6 +327,34 @@ def agentic_generate(max_tool_rounds: int = 3):
                 )
                 for td in tool_defs
             ]
+
+        # Add functional file tools when workspace files are present.
+        # Unlike the domain-specific mock tools above, these return real
+        # content from the variant's files dict — mirroring how actual
+        # agentic systems provide file access.
+        if files:
+            async def _list_files() -> str:
+                """List files available in the workspace"""
+                return "\n".join(files.keys())
+
+            async def _read_file(filename: str) -> str:
+                """Read the contents of a file in the workspace
+
+                Args:
+                    filename: Name of the file to read
+                """
+                if filename in files:
+                    return files[filename]
+                available = ", ".join(files.keys())
+                return f"File not found: {filename}. Available files: {available}"
+
+            tools.extend([
+                ToolDef(tool=_list_files, name="list_files"),
+                ToolDef(tool=_read_file, name="read_file"),
+            ])
+
+        if tools:
+            state.tools = tools
 
         # Generate with tool loop: Inspect will call mock tools when the
         # model requests them and feed results back, up to max_tool_rounds.
@@ -316,22 +393,26 @@ def agentic_generate(max_tool_rounds: int = 3):
 
 
 @scorer(metrics=[mean(), stderr()])
-def rubric_compliance_scorer():
+def rubric_compliance_scorer(grader_role: str = "grader"):
     """Score model output against the rubric using an independent grader.
 
-    Uses the 'grader' model role — override via
-    ``--model-role grader=<model>``.  Raises an error if the grader is
-    the same model being evaluated (self-grading bias).
+    Args:
+        grader_role: Model role name for the grader. Override via
+            ``--model-role <role>=<model>``. Multiple scorers with
+            different roles can be used for inter-rater reliability.
+
+    Raises an error if the grader is the same model being evaluated
+    (self-grading bias).
     """
     _grader_checked = False
 
     async def score(state: TaskState, target: Target) -> Score:
         nonlocal _grader_checked
         if not _grader_checked:
-            _check_independent_grader()
+            _check_independent_grader(grader_role)
             _grader_checked = True
 
-        grader = get_model(role="grader")
+        grader = get_model(role=grader_role)
 
         grader_prompt = GRADER_TEMPLATE.format(
             question=state.input_text,
@@ -408,7 +489,7 @@ def modality_eval(
         solver=agentic_generate(max_tool_rounds=max_tool_rounds),
         scorer=rubric_compliance_scorer(),
         name="modality-eval",
-        version=4,
+        version=5,
         fail_on_error=0.1,
         epochs=epochs,
     )

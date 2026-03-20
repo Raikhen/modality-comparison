@@ -30,6 +30,7 @@ data/                   All experiment data
     deepseek/           Benchmark variants from DeepSeek
     gemini/             Benchmark variants from Gemini
     backup/             Snapshot backup of claude variants
+docs/                   Pre-registration, deviations log
 src/                    Core Python library (eval, analysis, validation)
 scripts/                Operational scripts (variant generation, cost estimation)
 viewer/                 Next.js variant inspection UI
@@ -42,7 +43,7 @@ viewer/                 Next.js variant inspection UI
 | `src/config.py` | Central path definitions — all other modules import from here |
 | `src/schemas.py` | Pydantic models & Literal type aliases for modalities |
 | `src/dataset.py` | Loads `data/dataset.csv` into `Entry` dataclasses |
-| `src/eval_task.py` | Inspect AI `@task` — multi-turn eval with mock tool execution |
+| `src/eval_task.py` | Inspect AI `@task` — multi-turn eval with mock tools + functional file access |
 | `src/analyze.py` | Post-hoc analysis of `.eval` logs (stats + figures) |
 | `src/validate.py` | CLI tool for checking variant file integrity |
 | `scripts/generate_variants.py` | Generates variant JSON files via API |
@@ -60,16 +61,20 @@ python3 -m src.validate validate
 python3 -m src.validate summary
 python3 -m src.validate missing
 
-# Estimate costs before running
-python3 scripts/estimate_cost.py --eval-model openai/gpt-4o \
-    --grader-model anthropic/claude-sonnet-4-20250514 --paraphrases 5 --rollouts 3
+# Estimate costs — single model:
+python3 scripts/estimate_cost.py --eval-model openai/gpt-5.4 \
+    --grader-model anthropic/claude-sonnet-4.6 --paraphrases 5 --rollouts 3
+
+# Estimate costs — all configured eval models:
+python3 scripts/estimate_cost.py --all-models \
+    --grader-model anthropic/claude-sonnet-4.6 --paraphrases 5 --rollouts 3
 
 # Run evaluation (grader model override is REQUIRED):
-inspect eval src/eval_task.py --model openai/gpt-4o \
-    --model-role grader=anthropic/claude-sonnet-4-20250514
+inspect eval src/eval_task.py --model openai/gpt-5.4 \
+    --model-role grader=anthropic/claude-sonnet-4.6
 
-inspect eval src/eval_task.py --model openai/gpt-4o \
-    --model-role grader=anthropic/claude-sonnet-4-20250514 \
+inspect eval src/eval_task.py --model openai/gpt-5.4 \
+    --model-role grader=anthropic/claude-sonnet-4.6 \
     -T max_samples=100 -T epochs=3
 
 # Analyze results
@@ -101,32 +106,28 @@ python3 -m src.analyze logs/<specific-log>.eval
 ### Controls
 
 - Each paraphrase's scaffolding is tailored to its specific wording
-- Mock tool responses simulate real tool behavior (tools have no guardrails)
+- Domain-specific mock tools return canned responses (tools have no guardrails)
+- File tools (`read_file`, `list_files`) are functional — they return real
+  content from the variant's `files` dict, mirroring actual agentic file access.
+  File content is NOT pre-loaded into the system prompt; the model must call
+  `read_file` to see it.
 - Grader model must differ from eval model (enforced at runtime)
 - Rollouts (via Inspect `epochs`) provide additional replication
 
 ### Pre-registered Hypotheses
 
-These hypotheses were specified before analyzing results. All tests use
-non-parametric methods (Mann-Whitney U, Kruskal-Wallis) with Bonferroni
-correction for multiple comparisons.
+See `docs/preregistration.md` for the full pre-registration with specific
+statistical tests, decision rules, and sample size justification.
 
-**H1 (Modality main effect):** The full agentic modality produces higher
-median compliance scores than plain_text.
+**H1 (Modality main effect):** `agentic` > `plain_text` compliance.
 
-**H2 (Conversation history effect):** plain_text_with_history produces
-higher compliance than plain_text, isolating the effect of social proof
-from prior engagement.
+**H2 (Conversation history effect):** `plain_text_with_history` > `plain_text`.
 
-**H3 (Role framing effect):** agentic_no_history produces higher
-compliance than plain_text, isolating the effect of system prompt + tools.
+**H3 (Role framing effect):** `agentic_no_history` > `plain_text`.
 
-**H4 (Additivity):** The full agentic condition produces higher compliance
-than either partial condition alone (plain_text_with_history or
-agentic_no_history).
+**H4 (Additivity):** `agentic` > both partial conditions.
 
-**H5 (Domain moderation):** The modality effect varies by risk domain
-(interaction effect).
+**H5 (Domain moderation):** Modality effect varies by risk domain.
 
 ## Best Practices
 
@@ -170,7 +171,7 @@ agentic_no_history).
 
 ### Evaluation Workflow
 
-1. **Estimate** costs: `python3 scripts/estimate_cost.py --eval-model <model> --grader-model <model> --paraphrases 5 --rollouts 3`
+1. **Estimate** costs: `python3 scripts/estimate_cost.py --all-models --grader-model <model> --paraphrases 5 --rollouts 3`
 2. **Build** variants: `python3 scripts/generate_variants.py --num-paraphrases 5`
 3. **Validate** completeness: `python3 -m src.validate summary`
 4. **Run** eval: `inspect eval src/eval_task.py --model <model> --model-role grader=<model> -T epochs=3`

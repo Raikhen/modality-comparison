@@ -32,7 +32,7 @@ class Variant(BaseModel):
     system_prompt: str | None = None
     tools: list[dict] | None = None
     files: dict[str, str] | None = None
-    conversation_history: list[dict[str, str]] | None = None
+    conversation_history: list[dict] | None = None
     tool_responses: dict[str, str] | None = None
 
 

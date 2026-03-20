@@ -3,7 +3,9 @@ import path from "path";
 import crypto from "crypto";
 import type { EntryVariants, EntrySummary, Modality, VariantPatch, Source, Variant } from "./types";
 
-const VARIANTS_DIR = path.resolve(process.cwd(), "..", "data", "variants");
+const DATA_DIR = path.resolve(process.cwd(), "..", "data");
+const DATASET_PATH = path.join(DATA_DIR, "dataset.csv");
+const VARIANTS_DIR = path.join(DATA_DIR, "variants");
 
 const SOURCE_DIRS: Record<Source, string> = {
   production: path.join(VARIANTS_DIR, "claude"),
@@ -43,50 +45,111 @@ function normalizeVariants(data: EntryVariants): EntryVariants {
   };
 }
 
+/** Parse dataset.csv and return all entries. */
+function loadDatasetEntries(): { id: number; risk_domain: string; prompt: string }[] {
+  if (!fs.existsSync(DATASET_PATH)) return [];
+  const raw = fs.readFileSync(DATASET_PATH, "utf-8");
+  const lines = raw.split("\n").filter((l) => l.trim());
+  // CSV columns: ID, adversarial_prompt, rubric, risk_domain, ...
+  // Use a simple CSV parser that handles quoted fields with commas/newlines
+  const results: { id: number; risk_domain: string; prompt: string }[] = [];
+  // Skip header
+  for (let i = 1; i < lines.length; i++) {
+    const fields = parseCSVLine(lines[i]);
+    if (fields.length < 4) continue;
+    const id = parseInt(fields[0], 10);
+    if (isNaN(id)) continue;
+    results.push({ id, risk_domain: fields[3], prompt: fields[1] });
+  }
+  return results;
+}
+
+/** Minimal CSV line parser that handles quoted fields. */
+function parseCSVLine(line: string): string[] {
+  const fields: string[] = [];
+  let i = 0;
+  while (i < line.length) {
+    if (line[i] === '"') {
+      // Quoted field
+      i++;
+      let field = "";
+      while (i < line.length) {
+        if (line[i] === '"') {
+          if (i + 1 < line.length && line[i + 1] === '"') {
+            field += '"';
+            i += 2;
+          } else {
+            i++; // closing quote
+            break;
+          }
+        } else {
+          field += line[i];
+          i++;
+        }
+      }
+      fields.push(field);
+      if (i < line.length && line[i] === ',') i++; // skip delimiter
+    } else {
+      // Unquoted field
+      const next = line.indexOf(',', i);
+      if (next === -1) {
+        fields.push(line.slice(i));
+        break;
+      }
+      fields.push(line.slice(i, next));
+      i = next + 1;
+    }
+  }
+  return fields;
+}
+
 export function getAllEntries(): EntrySummary[] {
-  // Collect unique JSON filenames across all source directories
-  const allFiles = new Set<string>();
+  const dataset = loadDatasetEntries();
+
+  // Build a set of entry IDs that have variant files in any source
+  const variantIds = new Set<number>();
   for (const dir of Object.values(SOURCE_DIRS)) {
     if (!fs.existsSync(dir)) continue;
     for (const f of fs.readdirSync(dir)) {
-      if (f.endsWith(".json") && !f.startsWith("_")) allFiles.add(f);
+      if (f.endsWith(".json") && !f.startsWith("_")) {
+        const id = parseInt(f.replace(".json", ""), 10);
+        if (!isNaN(id)) variantIds.add(id);
+      }
     }
   }
 
-  const entries: EntrySummary[] = [];
-  const seen = new Set<number>();
-
-  for (const file of allFiles) {
-    try {
-      // Read from production first, fall back to any benchmark source
-      let data: EntryVariants | null = null;
-      for (const src of ["production", "gemini", "deepseek"] as const) {
-        const filePath = path.join(SOURCE_DIRS[src], file);
-        if (fs.existsSync(filePath)) {
-          data = JSON.parse(fs.readFileSync(filePath, "utf-8")) as EntryVariants;
-          break;
-        }
-      }
-      if (!data || seen.has(data.entry_id)) continue;
-      seen.add(data.entry_id);
-
-      const benchmarkSources: Source[] = [];
-      for (const src of ["gemini", "deepseek"] as const) {
-        if (fs.existsSync(path.join(SOURCE_DIRS[src], file))) benchmarkSources.push(src);
-      }
-
-      entries.push({
-        entry_id: data.entry_id,
-        risk_domain: data.risk_domain,
-        prompt_preview: data.original_prompt.slice(0, 150),
-        ...(benchmarkSources.length > 0 ? { benchmark_sources: benchmarkSources } : {}),
-      });
-    } catch {
-      // skip malformed files
+  // Build benchmark source lookup
+  const benchmarkMap = new Map<number, Source[]>();
+  for (const src of ["gemini", "deepseek"] as const) {
+    const dir = SOURCE_DIRS[src];
+    if (!fs.existsSync(dir)) continue;
+    for (const f of fs.readdirSync(dir)) {
+      if (!f.endsWith(".json") || f.startsWith("_")) continue;
+      const id = parseInt(f.replace(".json", ""), 10);
+      if (isNaN(id)) continue;
+      if (!benchmarkMap.has(id)) benchmarkMap.set(id, []);
+      benchmarkMap.get(id)!.push(src);
     }
   }
 
-  return entries.sort((a, b) => a.entry_id - b.entry_id);
+  return dataset.map((row) => {
+    const benchmarkSources = benchmarkMap.get(row.id);
+    return {
+      entry_id: row.id,
+      risk_domain: row.risk_domain,
+      prompt_preview: row.prompt.slice(0, 150),
+      has_variants: variantIds.has(row.id),
+      ...(benchmarkSources ? { benchmark_sources: benchmarkSources } : {}),
+    };
+  });
+}
+
+/** Look up basic entry info from dataset.csv (without variant data). */
+export function getDatasetEntry(id: number): { entry_id: number; original_prompt: string; risk_domain: string } | null {
+  const all = loadDatasetEntries();
+  const row = all.find((r) => r.id === id);
+  if (!row) return null;
+  return { entry_id: row.id, original_prompt: row.prompt, risk_domain: row.risk_domain };
 }
 
 export function getEntry(id: number): EntryVariants | null {

@@ -42,10 +42,12 @@ export function EntryTable({
   const q = (searchParams.get("q") ?? "").toLowerCase();
   const domain = searchParams.get("domain") ?? "";
   const benchmarkOnly = searchParams.get("benchmark") === "1";
+  const variantsOnly = searchParams.get("variants") === "1";
 
   const hasBenchmark = entries.some(
     (e) => e.benchmark_sources && e.benchmark_sources.length > 0
   );
+  const hasAnyVariants = entries.some((e) => e.has_variants);
 
   const [sortKey, setSortKey] = useState<SortKey>("entry_id");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
@@ -66,6 +68,7 @@ export function EntryTable({
 
   const filtered = entries.filter((e) => {
     if (domain && e.risk_domain !== domain) return false;
+    if (variantsOnly && !e.has_variants) return false;
     if (benchmarkOnly && !(e.benchmark_sources && e.benchmark_sources.length > 0))
       return false;
     if (
@@ -100,7 +103,7 @@ export function EntryTable({
 
   return (
     <div>
-      <FilterBar domains={domains} hasBenchmark={hasBenchmark} />
+      <FilterBar domains={domains} hasBenchmark={hasBenchmark} hasAnyVariants={hasAnyVariants} />
       <div
         className="font-mono text-[11px] uppercase tracking-wider mb-2"
         style={{ color: "var(--color-ink-muted)" }}
@@ -180,7 +183,7 @@ export function EntryTable({
                 >
                   <td
                     className="px-3 py-2 font-mono font-medium tabular-nums"
-                    style={{ color: "var(--color-ink-secondary)" }}
+                    style={{ color: entry.has_variants ? "var(--color-ink-secondary)" : "var(--color-ink-muted)" }}
                   >
                     {entry.entry_id}
                     {entry.benchmark_sources && entry.benchmark_sources.length > 0 && (

@@ -6,15 +6,18 @@ import { useRouter, useSearchParams } from "next/navigation";
 export function FilterBar({
   domains,
   hasBenchmark = false,
+  hasAnyVariants = false,
 }: {
   domains: string[];
   hasBenchmark?: boolean;
+  hasAnyVariants?: boolean;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const currentSearch = searchParams.get("q") ?? "";
   const currentDomain = searchParams.get("domain") ?? "";
   const benchmarkOnly = searchParams.get("benchmark") === "1";
+  const variantsOnly = searchParams.get("variants") === "1";
   const [searchValue, setSearchValue] = useState(currentSearch);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(null);
 
@@ -74,6 +77,39 @@ export function FilterBar({
           </option>
         ))}
       </select>
+      {hasAnyVariants && (
+        <label className="flex items-center gap-2 cursor-pointer whitespace-nowrap select-none">
+          <span
+            className="font-mono text-[11px] transition-colors duration-75"
+            style={{
+              color: variantsOnly ? "var(--color-amber)" : "var(--color-ink-muted)",
+            }}
+          >
+            Has variants
+          </span>
+          <button
+            role="switch"
+            aria-checked={variantsOnly}
+            aria-label="Has variants"
+            onClick={() => updateParams("variants", variantsOnly ? "" : "1")}
+            className="relative inline-flex items-center rounded-full transition-colors duration-75"
+            style={{
+              width: "28px",
+              height: "16px",
+              background: variantsOnly ? "var(--color-amber)" : "var(--color-rule-strong)",
+            }}
+          >
+            <span
+              className="block rounded-full bg-white transition-transform duration-75"
+              style={{
+                width: "12px",
+                height: "12px",
+                transform: variantsOnly ? "translateX(14px)" : "translateX(2px)",
+              }}
+            />
+          </button>
+        </label>
+      )}
       {hasBenchmark && (
         <label className="flex items-center gap-2 cursor-pointer whitespace-nowrap select-none">
           <span

@@ -59,6 +59,7 @@ export interface EntrySummary {
   entry_id: number;
   risk_domain: string;
   prompt_preview: string;
+  has_variants: boolean;
   benchmark_sources?: Source[];
 }
 

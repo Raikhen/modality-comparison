@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getEntry, getEntryFromSource, getDefaultSource, getBenchmarkSources, getAvailableSources, updateVariant } from "@/lib/variants";
+import { getEntry, getEntryFromSource, getDefaultSource, getBenchmarkSources, getAvailableSources, getDatasetEntry, updateVariant } from "@/lib/variants";
 import { MODALITIES } from "@/lib/types";
 import type { Modality, VariantPatch, Source } from "@/lib/types";
 
@@ -33,7 +33,12 @@ export async function GET(
   const resolvedSource = url.searchParams.has("source") ? source : getDefaultSource(entryId);
   const entry = getEntryFromSource(entryId, resolvedSource);
   if (!entry) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    // Return basic info from dataset.csv with empty variants
+    const datasetEntry = getDatasetEntry(entryId);
+    if (!datasetEntry) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+    return NextResponse.json({ ...datasetEntry, variants: [] });
   }
 
   return NextResponse.json(entry);

@@ -317,9 +317,9 @@ function QuickStats({
       deepseek: deepseek.prompt.split(/\s+/).length,
     },
     {
-      label: "System prompt length",
-      gemini: gemini.system_prompt?.length ?? 0,
-      deepseek: deepseek.system_prompt?.length ?? 0,
+      label: "System prompt words",
+      gemini: gemini.system_prompt?.split(/\s+/).filter(Boolean).length ?? 0,
+      deepseek: deepseek.system_prompt?.split(/\s+/).filter(Boolean).length ?? 0,
     },
     {
       label: "Tools",
